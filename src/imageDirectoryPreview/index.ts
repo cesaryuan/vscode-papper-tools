@@ -1,7 +1,7 @@
 /*
  * Directory image-preview Webview.
  *
- * This module owns the Explorer "View Images" command. It scans a selected
+ * This module owns the Explorer "Papper Tools: View Images" command. It scans a selected
  * directory breadth-first through VS Code's workspace filesystem, advancing
  * only after the Webview requests another batch. The Webview keeps stable
  * lightweight card skeletons for discovered metadata, but only loads image
@@ -88,7 +88,7 @@ export class ImageDirectoryPreview {
     try {
       const stat = await vscode.workspace.fs.stat(directoryUri);
       if (!isDirectory(stat.type)) {
-        await vscode.window.showWarningMessage("View Images only supports folders.");
+        await vscode.window.showWarningMessage("Papper Tools: View Images only supports folders.");
         return;
       }
     } catch (error) {

@@ -6,6 +6,8 @@ All notable changes to Papper Tools are documented in this file.
 
 ### Changed
 
+- Standardize command names, CodeLens and hover actions on English labels with the `Papper Tools:` prefix, preserving command IDs and existing keybindings.
+
 - Organize Papper settings into themed cards and named groups with short titles, separate descriptions, visible inheritance badges and aligned controls; collapse field paths, complete YAML editors and legacy DOCX options, and adapt navigation and bibliography previews to narrow windows.
 
 ### Added
@@ -13,9 +15,9 @@ All notable changes to Papper Tools are documented in this file.
 - Add table-caption and empty `[]{t="..."}` attribute completion/hover from Papper's exported catalog, with exact per-type options, value choices, accepted aliases and offline fallback.
 
 - Search Zotero Chinese community journal and thesis styles alongside the official repository, label each result's source, show community-generated citation/bibliography previews and download community CSL files into the workspace; keep either library usable when the other fails and retry failed sources on later searches.
-- Add a unified **Papper: 打开设置** window with formula/MathType, table, named DOCX style, bibliography, image, page-layout and cross-reference sections; edit manuscript/project and reply scopes with apply/reset controls and protection against stale configuration edits.
-- Route **设置参考文献样式** commands and hover actions to the unified settings window's bibliography section, retaining Zotero search/previews and downloading only on confirmation without closing the settings window.
-- Expose **Papper: 设置参考文献样式** in the Command Palette and on YAML `csl` key/value hovers in manuscript headers and project style files; update and reveal the selected metadata scope, including reply overrides.
+- Add a unified **Papper Tools: Open Settings** window with formula/MathType, table, named DOCX style, bibliography, image, page-layout and cross-reference sections; edit manuscript/project and reply scopes with apply/reset controls and protection against stale configuration edits.
+- Route **Set Citation Style** commands and hover actions to the unified settings window's bibliography section, retaining Zotero search/previews and downloading only on confirmation without closing the settings window.
+- Expose **Papper Tools: Set Citation Style** in the Command Palette and on YAML `csl` key/value hovers in manuscript headers and project style files; update and reveal the selected metadata scope, including reply overrides.
 - Replace the CSL quick picker with a searchable journal page containing Zotero's formatted Citations and Bibliography previews; support click/keyboard comparison, explicit confirmation and cancellation of obsolete preview requests.
 - Add a bibliography inlay-hint action to search Zotero's journal styles, download a usable local CSL into the manuscript workspace, and set/reveal its `csl` header path; remove build-explanation text from number-hint tooltips.
 - Add inlay-hint hover actions for reference prefixes and figure/table caption titles, prefilled from effective build metadata and applied to the source manuscript's YAML header as one undoable edit.
@@ -24,7 +26,7 @@ All notable changes to Papper Tools are documented in this file.
 - Extend configuration completion and hover help to leading Markdown/MDX YAML headers, including manuscript metadata, author lists and `papperSettings` overrides.
 - Add source-element style hover buttons that fill missing heading, body, table-text and image-caption settings with inline descriptions in the current Markdown YAML header, using actual reference DOCX defaults with persistent caching and preservation of existing overrides.
 - Add extra style actions for Pandoc spans and fenced Divs with `custom-style`, including nested elements; span actions use character-style defaults and omit paragraph-only settings while retaining contextual inheritance.
-- Show source style actions in one row with a shared `Papper:` prefix; styles absent from the reference DOCX inherit actual body defaults, filtered to supported character fields for spans.
+- Show source style actions in one row with a shared `Papper Tools:` prefix; styles absent from the reference DOCX inherit actual body defaults, filtered to supported character fields for spans.
 
 - Show Papper configuration hover help for existing style YAML fields and values, including nested styles, aliases and inline mappings.
 - Add context-aware Papper style YAML completions and a top-of-editor CodeLens action that merges the bundled example without overwriting existing values or enabling commented settings.

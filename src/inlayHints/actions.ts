@@ -34,14 +34,14 @@ export async function applyInlayMetadataSetting(document: vscode.TextDocument, f
 export function appendInlayMetadataActions(tooltip: vscode.MarkdownString, uriText: string, fields: InlayMetadataField[], ast: unknown): void {
   if (!fields.length) return;
   tooltip.isTrusted = { enabledCommands: fields.includes("csl") ? [SET_INLAY_METADATA_COMMAND, SET_CSL_STYLE_COMMAND] : [SET_INLAY_METADATA_COMMAND] };
-  tooltip.appendMarkdown(`${tooltip.value ? "\n\n" : ""}Papper: `);
+  tooltip.appendMarkdown(`${tooltip.value ? "\n\n" : ""}Papper Tools: `);
   for (const [index, field] of fields.entries()) {
     if (index) tooltip.appendMarkdown(" · ");
     const command = field === "csl" ? SET_CSL_STYLE_COMMAND : SET_INLAY_METADATA_COMMAND;
     const args = encodeURIComponent(JSON.stringify(field === "csl" ? [uriText] : [uriText, field, getBuiltMetadataValue(ast, field)]));
-    tooltip.appendMarkdown(`[设置${INLAY_METADATA_FIELDS[field]}](command:${command}?${args})`);
+    tooltip.appendMarkdown(`[Set ${INLAY_METADATA_FIELDS[field]}](command:${command}?${args})`);
   }
-  tooltip.appendMarkdown(fields.includes("csl") ? "\n\n作用于当前稿件的参考文献引用和文末列表" : "\n\n作用于当前稿件中同一类型的引用或题注");
+  tooltip.appendMarkdown(fields.includes("csl") ? "\n\nApplies to citations and the bibliography in the current manuscript" : "\n\nApplies to references or captions of the same type in the current manuscript");
 }
 
 /** Opens editing controls only on click, then applies one undoable manuscript-header edit. */
@@ -74,10 +74,10 @@ export class InlayMetadataController {
     const values = Array.isArray(current) ? current : [current];
     const updated: string[] = [];
     for (const [index, value] of values.entries()) {
-      const variant = Array.isArray(current) ? `（${index === 0 ? "单数" : index === 1 ? "复数" : `形式 ${index + 1}`}）` : "";
+      const variant = Array.isArray(current) ? ` (${index === 0 ? "Singular" : index === 1 ? "Plural" : `Form ${index + 1}`})` : "";
       const result = await vscode.window.showInputBox({
-        title: `设置${INLAY_METADATA_FIELDS[field]}${variant}`,
-        prompt: `${field}：应用于当前稿件的同类引用或题注，可留空以去掉前缀`,
+        title: `Papper Tools: Set ${INLAY_METADATA_FIELDS[field]}${variant}`,
+        prompt: `${field}: Applies to references or captions of the same type in the current manuscript; leave empty to remove the prefix`,
         value, ignoreFocusOut: true,
       });
       if (result === undefined) return undefined;

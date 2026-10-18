@@ -324,7 +324,7 @@ export class StyleConfigurationCodeLensProvider implements vscode.CodeLensProvid
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
     if (!isStyleConfigurationDocument(document)) return [];
     return [new vscode.CodeLens(new vscode.Range(0, 0, 0, 0), {
-      title: "Papper: 合并示例配置",
+      title: "Papper Tools: Merge Style Example",
       command: "pandocManuscriptTools.mergeStyleExample",
       arguments: [document.uri],
     })];

@@ -160,9 +160,9 @@ function renderStyleHover(text: string, line: number, character: number): { mark
 /** Verifies a normal source hover renders one button without any explanatory content. */
 function showsOnlyStyleButton(): void {
   const hover = renderStyleHover("# Heading", 0, 2);
-  const button = /^Papper: \[([^\]]+)\]\(command:([^?]+)\?([^\n]+)\)$/.exec(hover.markdown);
+  const button = /^Papper Tools: \[([^\]]+)\]\(command:([^?]+)\?([^\n]+)\)$/.exec(hover.markdown);
   assert.ok(button, "Hover must contain one button link and no additional content");
-  assert.match(button[1], /^设置 标题 1 的样式$/);
+  assert.match(button[1], /^Set Heading 1 Style$/);
   assert.deepEqual(JSON.parse(decodeURIComponent(button[3])), ["file:///paper.md", "标题 1"]);
 }
 
@@ -170,24 +170,24 @@ function showsOnlyStyleButton(): void {
 function showsBothImageStyleButtons(): void {
   for (const image of ["![caption](figure.png)", "![caption][figure]", '<img src="figure.png" alt="caption">']) {
     const hover = renderStyleHover(image, 0, 5);
-    const buttons = [...hover.markdown.matchAll(/\[设置 ([^\]]+) 的样式\]\(command:[^?]+\?([^\n]+?)\)/g)];
+    const buttons = [...hover.markdown.matchAll(/\[Set ([^\]]+) Style\]\(command:[^?]+\?([^\n]+?)\)/g)];
     assert.deepEqual(buttons.map((button) => button[1]), ["Image Caption", "Figure"]);
     for (const button of buttons) {
       assert.deepEqual(JSON.parse(decodeURIComponent(button[2])), ["file:///paper.md", button[1]]);
     }
-    assert.equal(hover.markdown.split("Papper:").length - 1, 1);
+    assert.equal(hover.markdown.split("Papper Tools:").length - 1, 1);
     assert.ok(!hover.markdown.includes("\n"));
   }
   const image = "![caption](figure.png)";
   const text = `::: {custom-style="Quote"}\nBefore ${image} after\n:::`;
   const hover = renderStyleHover(text, 1, 10);
-  assert.deepEqual([...hover.markdown.matchAll(/\[设置 ([^\]]+) 的样式\]/g)].map((button) => button[1]), ["Image Caption", "Figure", "Quote"]);
+  assert.deepEqual([...hover.markdown.matchAll(/\[Set ([^\]]+) Style\]/g)].map((button) => button[1]), ["Image Caption", "Figure", "Quote"]);
   assert.deepEqual(hover.range, [1, 7, 1, 7 + image.length]);
   assert.ok(!renderStyleHover(text, 1, 2).markdown.includes("Figure"));
   assert.ok(!renderStyleHover(text, 1, 7 + image.length + 1).markdown.includes("Image Caption"));
   assert.ok(!renderStyleHover(`Literal \`${image}\``, 0, 12).markdown.includes("Figure"));
   const nested = renderStyleHover(`::: {custom-style="Figure"}\n${image}\n:::`, 1, 5);
-  assert.equal([...nested.markdown.matchAll(/\[设置 Figure 的样式\]/g)].length, 1);
+  assert.equal([...nested.markdown.matchAll(/\[Set Figure Style\]/g)].length, 1);
 }
 
 /** Confirms inline reference defaults and inserted YAML contain only explicitly inherited character typography. */
@@ -223,11 +223,11 @@ function addsCustomStyleButtons(): void {
   ].join("\n");
   const character = text.split("\n")[5].indexOf("nested") + 1;
   const hover = renderStyleHover(text, 5, character);
-  const buttons = [...hover.markdown.matchAll(/\[设置 ([^\]]+) 的样式\]\(command:[^?]+\?([^\n]+?)\)/g)];
-  assert.equal(hover.markdown.split("Papper:").length - 1, 1);
+  const buttons = [...hover.markdown.matchAll(/\[Set ([^\]]+) Style\]\(command:[^?]+\?([^\n]+?)\)/g)];
+  assert.equal(hover.markdown.split("Papper Tools:").length - 1, 1);
   assert.ok(!hover.markdown.includes("\n"), "Style actions share one Markdown line");
-  assert.deepEqual(buttons.map((button) => button[1]).sort(), ["正文文本", "Outer", "Quote", "Emphasis Char", "Revision Char"].sort());
-  for (const button of buttons.filter((entry) => entry[1] !== "正文文本")) {
+  assert.deepEqual(buttons.map((button) => button[1]).sort(), ["Body Text", "Outer", "Quote", "Emphasis Char", "Revision Char"].sort());
+  for (const button of buttons.filter((entry) => entry[1] !== "Body Text")) {
     assert.deepEqual(JSON.parse(decodeURIComponent(button[2])), ["file:///paper.md", button[1], button[1].endsWith("Char") ? "character" : "paragraph"]);
   }
   assert.ok(hover.range[1] <= character && hover.range[3] > character);

@@ -377,7 +377,7 @@ test("CSL key and path hovers offer style selection for their own source and met
     const provider = scenario.language === "yaml" ? new StyleConfigurationHoverProvider() : new MarkdownYamlHeaderHoverProvider();
     for (const offset of [scenario.text.indexOf("csl:"), scenario.text.indexOf("chosen.csl")]) {
       const hover = await provider.provideHover(document as any, offset as any, { isCancellationRequested: false } as any) as unknown as Hover;
-      const link = /\[设置参考文献样式\]\(command:([^?]+)\?([^)]*)\)/.exec(hover.contents.value);
+      const link = /\[Set Citation Style\]\(command:([^?]+)\?([^)]*)\)/.exec(hover.contents.value);
       assert(link, "Both the CSL key and file path should offer selection");
       assert.deepEqual(JSON.parse(decodeURIComponent(link[2])), [uri, scenario.keys]);
       assert.deepEqual(hover.contents.isTrusted, { enabledCommands: [link[1]] });

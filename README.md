@@ -41,7 +41,7 @@ Open that folder in VS Code and edit `manuscript.md`. If uv is already installed
 | --- | --- |
 | Follow figures, tables, equations, and sections | Jump to labels, find references, complete labels after `@`, and spot missing references or duplicate labels |
 | Check citation and reference text | See Papper's rendered numbering and citation text beside the source, including grouped citations |
-| Adjust Word formatting | Open **Papper: 打开设置** for MathType, fonts, tables, images, page layout, and cross-references; apply manuscript, project, or reply settings |
+| Adjust Word formatting | Open **Papper Tools: Open Settings** for MathType, fonts, tables, images, page layout, and cross-references; apply manuscript, project, or reply settings |
 | Choose a journal's citation style | Search Zotero styles and the Chinese community collection, compare citation and bibliography previews, and apply a local CSL file |
 | Inspect equations and figures | Hover over math or local SVG/EMF/WMF images; browse image folders in grid, masonry, or folder layouts |
 | Review a revision | Fold revision attributes and line-reference excerpts; navigate from `reply_to_reviewers.md` to labels in the workspace-root `manuscript.md` |
@@ -64,8 +64,8 @@ $$ {#eq:loss}
 
 - Type `@` to complete a reference, or use **Go to Definition** on `@eq:loss`.
 - Hover over the formula to see its rendered form. Open Outline to navigate headings and labeled elements.
-- Hover over a heading or paragraph to open its style action, or run **Papper: 打开设置**.
-- Run **Papper: 设置参考文献样式** to search and compare journal styles.
+- Hover over a heading or paragraph to open its style action, or run **Papper Tools: Open Settings**.
+- Run **Papper Tools: Set Citation Style** to search and compare journal styles.
 
 In a Papper project, `style.yml` holds reusable formatting. A manuscript's YAML header can hold local overrides. The settings window writes changes back to those editable files.
 
@@ -77,8 +77,8 @@ Use these commands from the Command Palette, or the corresponding buttons above 
 | --- | --- |
 | **Papper Tools: Preview Markdown (Papper HTML)** | Open a side preview that includes unsaved changes and follows source navigation |
 | **Papper Tools: Build DOCX and Open in Word** | Save the source, build a fresh temporary DOCX, and open it in Word |
-| **Papper: 打开设置** | Edit formatting and reference settings |
-| **Papper: 设置参考文献样式** | Open the bibliography section with journal search and previews |
+| **Papper Tools: Open Settings** | Edit formatting and reference settings |
+| **Papper Tools: Set Citation Style** | Open the bibliography section with journal search and previews |
 
 Each Word build uses its own temporary file. Use **Save As** in Word to keep a permanent copy. To create the normal project output, run:
 
@@ -90,7 +90,7 @@ HTML helps you check content while writing; inspect final pagination in Word. Se
 
 ## More editing conveniences
 
-Right-click an image folder and choose **View Images** to browse its contents. SVG, EMF, and WMF files also have dedicated previews.
+Right-click an image folder and choose **Papper Tools: View Images** to browse its contents. SVG, EMF, and WMF files also have dedicated previews.
 
 English paragraph and code-comment translation is available on hover. This uses Google Translate or Microsoft Translator; turn off `pandocManuscriptTools.enableParagraphHoverTranslation` in Settings if you do not want translation requests.
 

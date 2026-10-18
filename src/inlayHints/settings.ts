@@ -3,13 +3,13 @@ import { getYamlHeader } from "../manuscriptStyle/document";
 import { asArray, asRecord, flattenAstText } from "./ast";
 
 export const INLAY_METADATA_FIELDS = {
-  figPrefix: "图引用 prefix",
-  tblPrefix: "表引用 prefix",
-  eqnPrefix: "公式引用 prefix",
-  secPrefix: "章节引用 prefix",
-  figureTitle: "图题注 title",
-  tableTitle: "表题注 title",
-  csl: "参考文献样式",
+  figPrefix: "Figure Reference Prefix",
+  tblPrefix: "Table Reference Prefix",
+  eqnPrefix: "Equation Reference Prefix",
+  secPrefix: "Section Reference Prefix",
+  figureTitle: "Figure Caption Title",
+  tableTitle: "Table Caption Title",
+  csl: "Citation Style",
 } as const;
 export type InlayMetadataField = keyof typeof INLAY_METADATA_FIELDS;
 export type InlayMetadataValue = string | string[];

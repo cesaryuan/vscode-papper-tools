@@ -163,11 +163,13 @@ export class ManuscriptStyleController implements vscode.HoverProvider {
     const unique = actions.filter((entry, index) => actions.findIndex((candidate) => candidate.name === entry.name && candidate.type === entry.type) === index);
     const markdown = new vscode.MarkdownString();
     markdown.isTrusted = { enabledCommands: [SET_MANUSCRIPT_STYLE_COMMAND] };
-    markdown.appendMarkdown("Papper: ");
+    markdown.appendMarkdown("Papper Tools: ");
     for (const [index, target] of unique.entries()) {
       const args = encodeURIComponent(JSON.stringify(target.custom ? [document.uri.toString(), target.name, target.type] : [document.uri.toString(), target.name]));
       if (index) markdown.appendMarkdown(" | ");
-      markdown.appendMarkdown(`[设置 ${escapeMarkdownText(target.name)} 的样式](command:${SET_MANUSCRIPT_STYLE_COMMAND}?${args})`);
+      // Translate built-in labels only; keep Word style names in command arguments and custom labels intact.
+      const displayName = target.custom ? target.name : target.name.replace(/^标题\s*(\d)$/, "Heading $1").replace(/^正文文本$/, "Body Text");
+      markdown.appendMarkdown(`[Set ${escapeMarkdownText(displayName)} Style](command:${SET_MANUSCRIPT_STYLE_COMMAND}?${args})`);
     }
     // Restrict the hover to the intersection so an inline action disappears when the mouse leaves its span.
     const startLine = Math.max(...unique.map((entry) => entry.line));

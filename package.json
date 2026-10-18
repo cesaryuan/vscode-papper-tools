@@ -76,11 +76,11 @@
     "commands": [
       {
         "command": "pandocManuscriptTools.openSettings",
-        "title": "Papper: 打开设置"
+        "title": "Papper Tools: Open Settings"
       },
       {
         "command": "pandocManuscriptTools.setCitationStyle",
-        "title": "Papper: 设置参考文献样式"
+        "title": "Papper Tools: Set Citation Style"
       },
       {
         "command": "pandocManuscriptTools.mergeStyleExample",
@@ -111,7 +111,7 @@
       },
       {
         "command": "pandocManuscriptTools.openImageDirectoryPreview",
-        "title": "View Images",
+        "title": "Papper Tools: View Images",
         "icon": "$(file-media)"
       },
       {

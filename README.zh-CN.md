@@ -41,7 +41,7 @@ cd my-paper
 | --- | --- |
 | 查找图、表、公式和章节 | 跳转到标签、查找引用、输入 `@` 补全，并提示未定义引用和重复标签 |
 | 检查引文与引用文字 | 在源文件旁显示 Papper 实际生成的编号和引文文本，包括合并引文 |
-| 调整 Word 排版 | 在 **Papper: 打开设置** 中修改 MathType、字体、表格、图片、页面和交叉引用，选择当前稿件、项目或审稿回复的设置 |
+| 调整 Word 排版 | 在 **Papper Tools: Open Settings** 中修改 MathType、字体、表格、图片、页面和交叉引用，选择当前稿件、项目或审稿回复的设置 |
 | 选择期刊参考文献格式 | 搜索 Zotero 官方与中文社区样式，对比正文引文和文后参考文献预览，再应用本地 CSL 文件 |
 | 查看公式与图片 | 悬停预览公式和本地 SVG、EMF、WMF 图片；按网格、瀑布流或文件夹浏览图片目录 |
 | 检查返修内容 | 折叠修订属性和行号引用摘录，从 `reply_to_reviewers.md` 跳转到工作区根目录 `manuscript.md` 的标签 |
@@ -64,8 +64,8 @@ $$ {#eq:loss}
 
 - 输入 `@` 查看引用补全，或在 `@eq:loss` 上执行“转到定义”。
 - 悬停在公式上查看渲染效果，打开大纲浏览章节和带标签的内容。
-- 悬停在标题或段落上使用样式操作，或者直接运行 **Papper: 打开设置**。
-- 运行 **Papper: 设置参考文献样式**，搜索期刊并比较引文样式。
+- 悬停在标题或段落上使用样式操作，或者直接运行 **Papper Tools: Open Settings**。
+- 运行 **Papper Tools: Set Citation Style**，搜索期刊并比较引文样式。
 
 Papper 项目中的 `style.yml` 保存可复用的排版设置，稿件 YAML 头部可以单独覆盖当前稿件的配置。设置窗口会将修改写回这些可编辑的文件。
 
@@ -77,8 +77,8 @@ Papper 项目中的 `style.yml` 保存可复用的排版设置，稿件 YAML 头
 | --- | --- |
 | **Papper Tools: Preview Markdown (Papper HTML)** | 在侧边预览当前稿件，包括尚未保存的修改，并跟随源码导航 |
 | **Papper Tools: Build DOCX and Open in Word** | 保存源文件、生成新的临时 DOCX，并在 Word 中打开 |
-| **Papper: 打开设置** | 修改排版和引用配置 |
-| **Papper: 设置参考文献样式** | 打开带期刊搜索与预览的参考文献设置 |
+| **Papper Tools: Open Settings** | 修改排版和引用配置 |
+| **Papper Tools: Set Citation Style** | 打开带期刊搜索与预览的参考文献设置 |
 
 每次 Word 构建使用独立的临时文件，需要长期保留时，请在 Word 中“另存为”。要生成项目目录中的正式输出，可以运行：
 
@@ -90,7 +90,7 @@ HTML 方便写作时检查内容，最终分页请在 Word 中确认。[Papper �
 
 ## 其他编辑辅助
 
-右键点击图片文件夹，选择 **View Images** 即可浏览其中的图片。SVG、EMF 和 WMF 文件也有专门的预览。
+右键点击图片文件夹，选择 **Papper Tools: View Images** 即可浏览其中的图片。SVG、EMF 和 WMF 文件也有专门的预览。
 
 悬停英文段落或代码注释时可以查看翻译。翻译使用 Google Translate 或 Microsoft Translator；不需要时，可在设置中关闭 `pandocManuscriptTools.enableParagraphHoverTranslation`。
 

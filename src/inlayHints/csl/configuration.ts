@@ -97,5 +97,5 @@ export function appendCslConfigurationAction(markdown: vscode.MarkdownString, do
   try { getCslSettingPath(document, keys); } catch { return; }
   const args = encodeURIComponent(JSON.stringify([document.uri.toString(), keys]));
   markdown.isTrusted = { enabledCommands: [SET_CSL_STYLE_COMMAND] };
-  markdown.appendMarkdown(`\n\nPapper: [设置参考文献样式](command:${SET_CSL_STYLE_COMMAND}?${args})`);
+  markdown.appendMarkdown(`\n\nPapper Tools: [Set Citation Style](command:${SET_CSL_STYLE_COMMAND}?${args})`);
 }

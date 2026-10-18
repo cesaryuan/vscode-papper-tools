@@ -6,7 +6,7 @@ These notes describe scanning, configuration contracts, caches, preview services
 
 ## Configuration and reference defaults
 
-Configuration and element-attribute completion/hover help, the settings window and **Papper: 合并示例配置**
+Configuration and element-attribute completion/hover help, the settings window and **Papper Tools: Merge Style Example**
 use definitions exported by the installed Papper through
 `papper config describe --format json`. New fields and the official project
 template are picked up when Papper changes. If Papper is absent, an older version
