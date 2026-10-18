@@ -1,3 +1,4 @@
+import { t } from "../localization";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
@@ -74,14 +75,14 @@ export class PapperMarkdownPreviewController {
     // Inactive editor title actions pass their resource; activeTextEditor may be another file.
     const document = uri ? await vscode.workspace.openTextDocument(uri) : vscode.window.activeTextEditor?.document;
     if (!document || !isBuildableMarkdownDocument(document)) {
-      vscode.window.showWarningMessage("Open a Markdown file before starting HTML preview.");
+      vscode.window.showWarningMessage(t("Open a Markdown file before starting HTML preview."));
       return;
     }
 
     const project = await findPandocManuscriptProject(document.uri);
 
     if (!(await isPapperBuildAvailable())) {
-      vscode.window.showErrorMessage("Cannot build HTML preview because `papper` is not on PATH and `uv` is not available to install it.");
+      vscode.window.showErrorMessage(t("Cannot build HTML preview because `papper` is not on PATH and `uv` is not available to install it."));
       await this.refreshContext();
       return;
     }
@@ -156,7 +157,7 @@ export class PapperMarkdownPreviewController {
       }
       await this.updateHtmlPreviewPanel(html, document, project, sourceVersion, buildId, panel!);
     } catch (error) {
-      const message = `Failed to build HTML preview: ${String(error.message || error)}`;
+      const message = t("Failed to build HTML preview: {0}", String(error.message || error));
       this.output.appendLine(`[HTML] ${message}`);
       if (this.isCurrentHtmlBuild(panel, document, sourceVersion, buildId)) {
         vscode.window.showErrorMessage(message);
@@ -211,7 +212,7 @@ export class PapperMarkdownPreviewController {
         this.htmlPreviewWebviewReady = false;
         this.htmlPreviewPanel.webview.html = "";
       }
-      this.htmlPreviewPanel.title = `${path.basename(document.uri.fsPath)} — Papper HTML Preview`;
+      this.htmlPreviewPanel.title = t("{0} — Papper HTML Preview", path.basename(document.uri.fsPath));
       this.htmlPreviewPanel.webview.options = {
         ...this.htmlPreviewPanel.webview.options,
         enableScripts: true,
@@ -223,7 +224,7 @@ export class PapperMarkdownPreviewController {
 
     const panel = vscode.window.createWebviewPanel(
       "pandocManuscriptTools.htmlPreview",
-      `${path.basename(document.uri.fsPath)} — Papper HTML Preview`,
+      t("{0} — Papper HTML Preview", path.basename(document.uri.fsPath)),
       vscode.ViewColumn.Beside,
       {
         enableScripts: true,
@@ -346,7 +347,7 @@ export class PapperMarkdownPreviewController {
         // Failed project lookup must not strand a newer source already waiting in this queue.
         this.output.appendLine(`[HTML] Could not resolve preview project: ${String(error)}`);
         if (buildId === this.htmlPreviewBuildId && this.htmlPreviewPanel) {
-          vscode.window.showErrorMessage(`Could not resolve preview project: ${String(error)}`);
+          vscode.window.showErrorMessage(t("Could not resolve preview project: {0}", String(error)));
         }
       }
     }

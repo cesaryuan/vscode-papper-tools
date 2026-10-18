@@ -1,3 +1,4 @@
+import { t } from "./localization";
 import * as vscode from "vscode";
 import { checkForPapperUpdate, upgradePapper } from "./papperBuildUtils";
 
@@ -58,21 +59,21 @@ export class PapperUpdateChecker {
 
       this.promptRunning = true;
       const action = await vscode.window.showInformationMessage(
-        `Papper 有可用更新（${update.summary}），是否现在更新？`,
-        "更新",
-        "稍后",
+        t("A Papper update is available ({0}). Update now?", update.summary),
+        t("Update"),
+        t("Later"),
       );
-      if (action !== "更新") {
+      if (action !== t("Update")) {
         return;
       }
 
       await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, title: "正在更新 Papper" },
+        { location: vscode.ProgressLocation.Notification, title: t("Updating Papper") },
         async () => upgradePapper(),
       );
-      void vscode.window.showInformationMessage("Papper 已更新。");
+      void vscode.window.showInformationMessage(t("Papper has been updated."));
     } catch (error) {
-      const message = `Papper 更新失败: ${String(error)}`;
+      const message = t("Could not update Papper: {0}", String(error));
       void vscode.window.showErrorMessage(message);
     } finally {
       this.promptRunning = false;

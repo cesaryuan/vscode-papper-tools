@@ -1,3 +1,4 @@
+import { t } from "../../localization";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { findPandocManuscriptProject } from "../../papperBuildUtils";
@@ -17,13 +18,13 @@ export class CslStyleController {
     getCslSettingPath(document, keys);
     validateCslConfiguration(document, keys);
     if (signal?.aborted) return false;
-    if (original !== getCslConfigurationContent(document)) throw new Error("搜索期间参考文献样式配置已改变，请重新设置");
+    if (original !== getCslConfigurationContent(document)) throw new Error(t("The citation style configuration changed during the search. Try again"));
     // Alternate style filenames may not mark a Papper project; their paths still resolve beside the style file.
     const projectRoot = isCslStyleDocument(document) ? path.dirname(uri.fsPath) : (await findPandocManuscriptProject(uri)).rootUri.fsPath;
     const root = vscode.workspace.getWorkspaceFolder(uri)?.uri.fsPath ?? path.dirname(uri.fsPath);
     this.output.appendLine(`[CSL] Downloading ${style.source === "chinese" ? "Zotero Chinese" : "Zotero official"} style: ${style.name}`);
     const xml = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification,
-      title: `正在下载参考文献样式：${style.title}`, cancellable: true }, async (_progress, token) => {
+      title: t("Downloading citation style: {0}", style.title), cancellable: true }, async (_progress, token) => {
       const controller = new AbortController();
       const cancellation = token.onCancellationRequested(() => controller.abort());
       /** Stops downloads when the containing settings window closes. */
@@ -39,7 +40,7 @@ export class CslStyleController {
     });
     if (xml === undefined) return false;
     if (signal?.aborted) return false;
-    if (original !== getCslConfigurationContent(document)) throw new Error("下载期间参考文献样式配置已改变，请重新设置");
+    if (original !== getCslConfigurationContent(document)) throw new Error(t("The citation style configuration changed during the download. Try again"));
     const filename = await saveCslStyle(root, style.name, xml);
     if (signal?.aborted) return false;
     // Papper builds run from the discovered project root; forward slashes keep the YAML path portable.

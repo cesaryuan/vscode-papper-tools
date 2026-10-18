@@ -1,10 +1,11 @@
+import { t } from "../../localization";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { isStyleName } from "./zotero";
 
 /** Saves a usable CSL in the workspace, reusing identical files and never replacing an existing local customization. */
 export async function saveCslStyle(root: string, name: string, xml: string): Promise<string> {
-  if (!isStyleName(name)) throw new Error("无效的 CSL 文件名");
+  if (!isStyleName(name)) throw new Error(t("Invalid CSL file name"));
   const directory = path.join(root, "pandoc", "csl");
   await fs.mkdir(directory, { recursive: true });
   for (let index = 0; index < 1000; index++) {
@@ -28,5 +29,5 @@ export async function saveCslStyle(root: string, name: string, xml: string): Pro
     await handle.close();
     return filename;
   }
-  throw new Error("同名 CSL 文件过多，无法保存下载的样式");
+  throw new Error(t("Too many CSL files share this name. Could not save the downloaded style"));
 }

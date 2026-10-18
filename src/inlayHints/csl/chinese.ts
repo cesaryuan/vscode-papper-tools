@@ -1,3 +1,4 @@
+import { t } from "../../localization";
 import type { ZoteroPreview, ZoteroStyle } from "./zotero";
 
 export const CHINESE_STYLES_ORIGIN = "https://zotero-chinese.com";
@@ -17,20 +18,20 @@ function readJsonLiteral(source: string, start: number): unknown {
   for (let index = start + 1; index < source.length; index++) {
     const char = source[index];
     if (char === quote) return JSON.parse(value);
-    if (quote === "`" && char === "$" && source[index + 1] === "{") throw new Error("中文社区样式索引包含非 JSON 内容");
+    if (quote === "`" && char === "$" && source[index + 1] === "{") throw new Error(t("The Chinese community style index contains non-JSON content"));
     if (char !== "\\") { value += char; continue; }
     const escape = source[++index];
     const simple: Record<string, string> = { n: "\n", r: "\r", t: "\t", b: "\b", f: "\f", v: "\v", "0": "\0" };
     if (escape === "u" || escape === "x") {
       const length = escape === "u" ? 4 : 2;
       const digits = source.slice(index + 1, index + 1 + length);
-      if (!new RegExp(`^[a-f0-9]{${length}}$`, "i").test(digits)) throw new Error("中文社区索引的字符转义无效");
+      if (!new RegExp(`^[a-f0-9]{${length}}$`, "i").test(digits)) throw new Error(t("Invalid character escape in the Chinese community style index"));
       value += String.fromCharCode(parseInt(digits, 16)); index += length;
     } else if (escape === "\n" || escape === "\r") {
       if (escape === "\r" && source[index + 1] === "\n") index++;
     } else value += simple[escape] ?? escape;
   }
-  throw new Error("中文社区样式索引不完整");
+  throw new Error(t("The Chinese community style index is incomplete"));
 }
 
 /** Reads the site's generated summary array without depending on its changing variable names or asset hashes. */
@@ -51,17 +52,17 @@ export function parseCommunityIndex(source: string): ZoteroStyle[] {
     }
     if (styles.length) return styles;
   }
-  throw new Error("中文社区样式索引格式已变化，无法读取");
+  throw new Error(t("The Chinese community style index format has changed and cannot be read"));
 }
 
 /** Discovers the site's current assets because the community publishes its summary index in a hashed bundle. */
 export async function loadCommunityStyles(read: ReadResource): Promise<ZoteroStyle[]> {
   const page = await read(`${CHINESE_STYLES_ORIGIN}/styles/`);
   const theme = page.match(/(?:\/?assets\/chunks\/theme\.[a-zA-Z0-9_-]+\.js)/)?.[0];
-  if (!theme) throw new Error("未找到中文社区样式索引入口");
+  if (!theme) throw new Error(t("Could not find the Chinese community style index entry point"));
   const themeSource = await read(`${CHINESE_STYLES_ORIGIN}/${theme.replace(/^\//, "")}`);
   const cards = themeSource.match(/StyleCards\.[a-zA-Z0-9_-]+\.js/)?.[0];
-  if (!cards) throw new Error("未找到中文社区样式列表");
+  if (!cards) throw new Error(t("Could not find the Chinese community style list"));
   return parseCommunityIndex(await read(`${CHINESE_STYLES_ORIGIN}/assets/chunks/${cards}`));
 }
 
@@ -69,6 +70,6 @@ export async function loadCommunityStyles(read: ReadResource): Promise<ZoteroSty
 export function parseCommunityPreview(text: string): ZoteroPreview {
   const data: unknown = JSON.parse(text);
   const record = data as Record<string, unknown>;
-  if (!record || typeof record.citations !== "string" || typeof record.bibliography !== "string") throw new Error("中文社区样式预览格式不正确");
+  if (!record || typeof record.citations !== "string" || typeof record.bibliography !== "string") throw new Error(t("Invalid Chinese community style preview format"));
   return { citations: [record.citations], bibliography: record.bibliography };
 }

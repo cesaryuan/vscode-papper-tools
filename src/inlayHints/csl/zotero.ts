@@ -1,3 +1,4 @@
+import { t } from "../../localization";
 import { DOMParser, XMLSerializer } from "@xmldom/xmldom";
 import { CHINESE_STYLES_ORIGIN, isCommunityPathSegment, loadCommunityStyles, parseCommunityPreview } from "./chinese";
 
@@ -25,7 +26,7 @@ async function readZoteroResource(url: string, signal?: AbortSignal): Promise<st
     signal?.throwIfAborted();
     // Zotero's download endpoint rejects combined JSON/XML Accept values with HTTP 406.
     const response = await fetch(url, { signal: controller.signal });
-    if (!response.ok) throw new Error(`Zotero 请求失败：HTTP ${response.status}`);
+    if (!response.ok) throw new Error(t("Zotero request failed: HTTP {0}", response.status));
     return await response.text();
   } finally {
     clearTimeout(timeout);
@@ -36,10 +37,10 @@ async function readZoteroResource(url: string, signal?: AbortSignal): Promise<st
 /** Parses CSL before any disk write and discovers dependent styles that need their parent formatting rules. */
 function parseCsl(xml: string, community = false) {
   const document = new DOMParser({ onError: (level, message) => {
-    if (level !== "warning") throw new Error(`CSL XML 无法解析：${message}`);
+    if (level !== "warning") throw new Error(t("Could not parse CSL XML: {0}", message));
   } }).parseFromString(xml, "application/xml");
   const root = document.documentElement;
-  if (!root || root.localName !== "style" || root.namespaceURI !== CSL_NAMESPACE) throw new Error("Zotero 返回的内容不是有效 CSL 样式");
+  if (!root || root.localName !== "style" || root.namespaceURI !== CSL_NAMESPACE) throw new Error(t("Zotero returned an invalid CSL style"));
   const links = root.getElementsByTagNameNS(CSL_NAMESPACE, "link");
   let parent: string | undefined;
   let communityParent: string | undefined;
@@ -49,15 +50,15 @@ function parseCsl(xml: string, community = false) {
     const url = new URL(link.getAttribute("href"));
     if (community && url.origin === CHINESE_STYLES_ORIGIN && url.pathname.startsWith("/styles/")) {
       const directory = decodeURIComponent(url.pathname.slice("/styles/".length));
-      if (!isCommunityPathSegment(directory)) throw new Error("中文社区 CSL 母样式路径无效");
+      if (!isCommunityPathSegment(directory)) throw new Error(t("Invalid Chinese community CSL parent style path"));
       communityParent = directory; continue;
     }
     const name = url.pathname.replace(/^\/styles\//, "");
     if (!["www.zotero.org", "zotero.org"].includes(url.hostname) || !["http:", "https:"].includes(url.protocol)
-      || !url.pathname.startsWith("/styles/") || !isStyleName(name)) throw new Error("CSL 母样式链接不属于 Zotero 样式库");
+      || !url.pathname.startsWith("/styles/") || !isStyleName(name)) throw new Error(t("The CSL parent style URL is outside the Zotero style repository"));
     parent = name;
   }
-  if (!parent && !communityParent && !root.getElementsByTagNameNS(CSL_NAMESPACE, "citation").length) throw new Error("CSL 样式缺少引用格式或母样式");
+  if (!parent && !communityParent && !root.getElementsByTagNameNS(CSL_NAMESPACE, "citation").length) throw new Error(t("The CSL style has no citation format or parent style"));
   return { document, root, parent, communityParent, locale: root.getAttribute("default-locale") || undefined };
 }
 
@@ -82,7 +83,7 @@ export class ZoteroStyleRepository {
     const styles: ZoteroStyle[] = [];
     for (const [index, result] of results.entries()) {
       if (result.status === "fulfilled") styles.push(...result.value);
-      else this.indexWarnings.push(`${index === 0 ? "Zotero 官方" : "Zotero 中文社区"}样式库加载失败：${result.reason instanceof Error ? result.reason.message : String(result.reason)}`);
+      else this.indexWarnings.push(t("Could not load the {0} style repository: {1}", index === 0 ? t("Zotero official") : t("Zotero Chinese community"), result.reason instanceof Error ? result.reason.message : String(result.reason)));
     }
     if (!styles.length) throw new Error(this.indexWarnings.join("；"));
     if (!this.indexWarnings.length) this.combinedIndex = styles;
@@ -92,7 +93,7 @@ export class ZoteroStyleRepository {
   /** Validates the repository index without trusting remote names as arbitrary filesystem paths. */
   private async loadIndex(): Promise<ZoteroStyle[]> {
     const data: unknown = JSON.parse(await this.read(STYLE_INDEX_URL));
-    if (!Array.isArray(data)) throw new Error("Zotero 样式索引格式不正确");
+    if (!Array.isArray(data)) throw new Error(t("Invalid Zotero style index format"));
     const styles: ZoteroStyle[] = [];
     for (const value of data) {
       if (!value || typeof value !== "object") continue;
@@ -104,19 +105,19 @@ export class ZoteroStyleRepository {
         format: typeof categories?.format === "string" ? categories.format : undefined,
         dependent: entry.dependent === 1 || entry.dependent === true });
     }
-    if (!styles.length) throw new Error("Zotero 样式索引中没有可用样式");
+    if (!styles.length) throw new Error(t("The Zotero style index contains no usable styles"));
     return styles;
   }
 
   /** Loads Zotero's actual sample citations and bibliography, caching successful previews with bounded memory. */
   async getPreview(style: ZoteroStyle, signal?: AbortSignal): Promise<ZoteroPreview> {
-    if (!isStyleName(style.name)) throw new Error("无效的 CSL 预览名称");
+    if (!isStyleName(style.name)) throw new Error(t("Invalid CSL preview name"));
     signal?.throwIfAborted();
     const key = `${style.source === "chinese" ? "chinese/" : ""}${style.dependent ? "dependent/" : ""}${style.name}`;
     const cached = this.previews.get(key);
     if (cached) { this.previews.delete(key); this.previews.set(key, cached); return cached; }
     if (style.source === "chinese") {
-      if (!/^[a-f0-9]{1,16}$/.test(style.community?.previewKey ?? "")) throw new Error("无效的中文社区预览名称");
+      if (!/^[a-f0-9]{1,16}$/.test(style.community?.previewKey ?? "")) throw new Error(t("Invalid Chinese community preview name"));
       const preview = parseCommunityPreview(await this.read(`${CHINESE_STYLES_ORIGIN}/styles-data/${style.community.previewKey}.json`, signal));
       signal?.throwIfAborted(); this.cachePreview(key, preview); return preview;
     }
@@ -124,7 +125,7 @@ export class ZoteroStyleRepository {
     signal?.throwIfAborted();
     const record = data as Record<string, unknown>;
     if (!record || !Array.isArray(record.citation) || !record.citation.every((entry) => typeof entry === "string")
-      || typeof record.bibliography !== "string") throw new Error("Zotero 样式预览格式不正确");
+      || typeof record.bibliography !== "string") throw new Error(t("Invalid Zotero style preview format"));
     const preview = { citations: record.citation as string[], bibliography: record.bibliography };
     this.cachePreview(key, preview);
     return preview;
@@ -144,12 +145,12 @@ export class ZoteroStyleRepository {
     for (let depth = 0; depth < 8; depth++) {
       signal?.throwIfAborted();
       const identity = `${current.source ?? "official"}/${current.name}`;
-      if (!isStyleName(current.name) || visited.has(identity)) throw new Error("CSL 母样式名称无效或存在循环依赖");
+      if (!isStyleName(current.name) || visited.has(identity)) throw new Error(t("Invalid CSL parent style name or circular dependency"));
       visited.add(identity);
       let url = `https://www.zotero.org/styles/${encodeURIComponent(current.name)}`;
       if (current.source === "chinese") {
         if (!isCommunityPathSegment(current.community?.directory) || !isCommunityPathSegment(current.community?.file)
-          || !current.community.file.endsWith(".csl")) throw new Error("无效的中文社区 CSL 路径");
+          || !current.community.file.endsWith(".csl")) throw new Error(t("Invalid Chinese community CSL path"));
         url = `${CHINESE_STYLES_ORIGIN}/styles/${encodeURIComponent(current.community.directory)}/${encodeURIComponent(current.community.file)}`;
       }
       const xml = await this.read(url, signal);
@@ -158,7 +159,7 @@ export class ZoteroStyleRepository {
       locale ??= parsed.locale;
       if (parsed.communityParent) {
         current = (await this.getStyles()).find(candidate => candidate.source === "chinese" && candidate.community?.directory === parsed.communityParent);
-        if (!current) throw new Error("未找到中文社区 CSL 母样式");
+        if (!current) throw new Error(t("Could not find the Chinese community CSL parent style"));
         continue;
       }
       if (parsed.parent) { current = { name: parsed.parent, title: parsed.parent }; continue; }
@@ -168,6 +169,6 @@ export class ZoteroStyleRepository {
       }
       return xml;
     }
-    throw new Error("CSL 母样式依赖层级过深");
+    throw new Error(t("CSL parent style dependency depth exceeded"));
   }
 }

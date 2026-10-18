@@ -1,3 +1,4 @@
+import { htmlMessage } from "../../localization";
 import { DOMParser, type Node } from "@xmldom/xmldom";
 import type { ZoteroPreview } from "./zotero";
 
@@ -42,6 +43,6 @@ export function sanitizePreviewHtml(html: string): string {
 
 /** Renders both Zotero sample sections with their original safe formatting. */
 export function renderZoteroPreview(preview: ZoteroPreview): string {
-  return `<section><h2>Citations</h2><div class="citations">${preview.citations.map(sanitizePreviewHtml).join(" ")}</div></section>`
-    + `<section><h2>Bibliography</h2>${sanitizePreviewHtml(preview.bibliography)}</section>`;
+  return `<section><h2>${htmlMessage("Citations")}</h2><div class="citations">${preview.citations.map(sanitizePreviewHtml).join(" ")}</div></section>`
+    + `<section><h2>${htmlMessage("Bibliography")}</h2>${sanitizePreviewHtml(preview.bibliography)}</section>`;
 }

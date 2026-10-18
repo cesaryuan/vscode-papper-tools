@@ -1,3 +1,4 @@
+import { t } from "../localization";
 /**
  * Folder-tree descriptors for the directory image-preview Webview.
  *
@@ -7,7 +8,7 @@
  */
 
 /** Label displayed for images that are directly inside the selected directory. */
-export const TOP_LEVEL_FOLDER_LABEL = "Top level";
+export const TOP_LEVEL_FOLDER_LABEL = t("Top level");
 
 /** One visible node in the root-relative directory hierarchy. */
 export type FolderHierarchyNode = {

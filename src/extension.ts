@@ -1,3 +1,4 @@
+import { configureLocalization, t } from "./localization";
 import * as vscode from "vscode";
 import { EXTENSION_NAME, PANDOC_SELECTOR, IMAGE_PREVIEW_SELECTOR, MATH_HOVER_SELECTOR, BUILD_DOCX_COMMAND, BUILD_HTML_COMMAND, INSTALL_OR_UPDATE_PAPPER_COMMAND, OPEN_IMAGE_PREVIEW_COMMAND, OPEN_IMAGE_DIRECTORY_PREVIEW_COMMAND, OPEN_SVG_PREVIEW_COMMAND, OPEN_SVG_SOURCE_TEXT_COMMAND, METAFILE_PREVIEW_EDITOR_VIEW_TYPE, SVG_PREVIEW_EDITOR_VIEW_TYPE } from "./constants";
 import { PandocWorkspaceIndex } from "./workspaceIndex";
@@ -32,6 +33,7 @@ import { PapperConfigurationSync } from "./papperConfigurationSync";
  * @param context VS Code extension context.
  */
 export function activate(context: vscode.ExtensionContext) {
+  configureLocalization(vscode.l10n.bundle, vscode.env.language, (message, ...args) => vscode.l10n.t(message, ...args));
   const output = vscode.window.createOutputChannel(EXTENSION_NAME);
   const configurationSync = new PapperConfigurationSync(output);
   /** Deduplicates schema refreshes across completion, hover and settings requests. */
@@ -124,7 +126,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.commands.registerCommand("pandocManuscriptTools.rebuildIndex", async () => {
     await index.refreshWorkspace();
     updateDiagnosticsForOpenDocuments(index, diagnostics);
-    vscode.window.showInformationMessage("Papper Tools index rebuilt.");
+    vscode.window.showInformationMessage(t("Papper Tools index rebuilt."));
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand(BUILD_DOCX_COMMAND, async (uri: vscode.Uri | undefined) => {
@@ -139,7 +141,7 @@ export function activate(context: vscode.ExtensionContext) {
       try {
         const document = uri ? await vscode.workspace.openTextDocument(uri) : vscode.window.activeTextEditor?.document;
         if (!document || !isStyleConfigurationDocument(document)) {
-          void vscode.window.showWarningMessage("请先打开 style.yml 或 style.yaml 配置文件");
+          void vscode.window.showWarningMessage(t("Open a style.yml or style.yaml configuration file first"));
           return;
         }
         const editor = await vscode.window.showTextDocument(document, { preview: false });
@@ -147,20 +149,20 @@ export function activate(context: vscode.ExtensionContext) {
         await mergeStyleExampleIntoEditor(editor, output);
       } catch (error) {
         output.appendLine(`Could not merge the style example: ${String(error)}`);
-        void vscode.window.showErrorMessage(`合并示例配置失败：${error instanceof Error ? error.message : String(error)}`);
+        void vscode.window.showErrorMessage(t("Could not merge the example configuration: {0}", error instanceof Error ? error.message : String(error)));
       }
     }));
   /** Installs or updates Papper and refreshes features without reopening the Markdown editor. */
   context.subscriptions.push(vscode.commands.registerCommand(INSTALL_OR_UPDATE_PAPPER_COMMAND, async () => {
     output.show(true);
     if (papperMaintenanceRunning) {
-      void vscode.window.showInformationMessage("Papper 正在安装或更新，请稍候");
+      void vscode.window.showInformationMessage(t("Papper is being installed or updated. Please wait"));
       return;
     }
     papperMaintenanceRunning = true;
     try {
       await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, title: "正在安装或更新 Papper" },
+        { location: vscode.ProgressLocation.Notification, title: t("Installing or updating Papper") },
         /** Streams uv progress to the shared extension output channel. */
         async () => {
           await installOrUpdatePapper(output);
@@ -169,10 +171,10 @@ export function activate(context: vscode.ExtensionContext) {
       );
       await markdownPreview.refreshContext();
       inlayHints.refreshOpenDocuments();
-      void vscode.window.showInformationMessage("Papper 已安装或更新。");
+      void vscode.window.showInformationMessage(t("Papper has been installed or updated."));
     } catch (error) {
       output.appendLine(`[Papper] Installation or update failed: ${String(error)}`);
-      void vscode.window.showErrorMessage(`Papper 安装或更新失败: ${String(error)}`);
+      void vscode.window.showErrorMessage(t("Could not install or update Papper: {0}", String(error)));
     } finally {
       papperMaintenanceRunning = false;
     }
@@ -338,7 +340,7 @@ export function deactivate() {}
 async function reopenResourceWithSvgPreview(uri: vscode.Uri | undefined): Promise<void> {
   const resourceUri = uri || vscode.window.activeTextEditor?.document.uri;
   if (!resourceUri && !hasActiveEditorTab()) {
-    await vscode.window.showWarningMessage("No SVG source editor is active.");
+    await vscode.window.showWarningMessage(t("No SVG source editor is active."));
     return;
   }
 
@@ -353,7 +355,7 @@ async function reopenResourceWithSvgPreview(uri: vscode.Uri | undefined): Promis
 async function reopenResourceWithDefaultEditor(uri: vscode.Uri | undefined): Promise<void> {
   const resourceUri = uri || getActiveCustomEditorUri();
   if (!resourceUri && !hasActiveEditorTab()) {
-    await vscode.window.showWarningMessage("No SVG preview is active.");
+    await vscode.window.showWarningMessage(t("No SVG preview is active."));
     return;
   }
 

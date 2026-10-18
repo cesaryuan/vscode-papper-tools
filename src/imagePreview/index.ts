@@ -1,3 +1,4 @@
+import { t } from "../localization";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
@@ -255,8 +256,8 @@ function renderOptionsCacheSuffix(options: ImagePreviewRenderOptions) {
  */
 function createImagePreviewHoverMarkdown(target: string, imageSource: string) {
   const markdown = new vscode.MarkdownString(undefined, true);
-  markdown.appendMarkdown(`**Image preview** \`${formatImageTargetLabel(target)}\`\n\n`);
-  markdown.appendMarkdown(`![Rendered image preview](${imageSource})`);
+  markdown.appendMarkdown(t("**Image preview** `{0}`\n\n", formatImageTargetLabel(target)));
+  markdown.appendMarkdown(t("![Rendered image preview]({0})", imageSource));
   return markdown;
 }
 
@@ -291,8 +292,8 @@ const HOVER_NESTED_RASTER_DIMENSIONS = [100, 80, 64, 48, 32, 24, 16, 12, 8, 4, 2
  */
 function buildImagePreviewUnavailableHover(target: string) {
   const markdown = new vscode.MarkdownString(undefined, true);
-  markdown.appendMarkdown(`**Image preview** \`${formatImageTargetLabel(target)}\`\n\n`);
-  markdown.appendMarkdown("$(warning) Preview could not render. See the Papper Tools output for details.");
+  markdown.appendMarkdown(t("**Image preview** `{0}`\n\n", formatImageTargetLabel(target)));
+  markdown.appendMarkdown(t("$(warning) Preview could not render. See the Papper Tools output for details."));
   return markdown;
 }
 

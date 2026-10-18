@@ -1,10 +1,11 @@
+import { t, htmlMessage, serializeLocalization } from "../localization";
 import { buildCslPickerHtml } from "../inlayHints/csl/pickerHtml";
 import { SETTINGS_SECTIONS } from "./model";
 import { SETTINGS_GROUPS, SETTINGS_LABELS } from "./presentation";
 
 /** Builds one settings window with shared navigation, field editors and the embedded Zotero bibliography section. */
 export function buildPapperSettingsHtml(): string {
-  const navigation = SETTINGS_SECTIONS.map((section) => `<button class="nav-item" data-section="${section.id}">${section.title}</button>`).join("");
+  const navigation = SETTINGS_SECTIONS.map((section) => `<button class="nav-item" data-section="${section.id}">${htmlMessage(section.title)}</button>`).join("");
   return buildCslPickerHtml({
     styles: `
     [hidden] { display:none !important; }
@@ -68,13 +69,13 @@ export function buildPapperSettingsHtml(): string {
     @media(max-width:780px) { .settings-layout { grid-template-columns:1fr; grid-template-rows:auto minmax(0,1fr); } nav { display:flex; padding:8px; border-right:0; border-bottom:1px solid var(--vscode-panel-border); overflow-x:auto; } .nav-item { white-space:nowrap; width:auto; margin:0 4px 0 0; } .settings-heading { flex-wrap:wrap; gap:4px 16px; margin-bottom:12px; } .settings-head { padding:16px 20px; } }
     @media(max-width:650px) { #bibliography .content { grid-template-columns:1fr; grid-template-rows:190px minmax(260px,1fr); } #field-page,.page { padding:20px 16px; } .setting { padding:16px; } .setting-heading { flex-wrap:wrap; gap:8px; } .setting-info { flex-basis:100%; } .setting-heading-tools { margin-left:auto; } #style-picker { flex-wrap:wrap; padding:16px; } #style-name { flex-basis:100%; order:1; } #choose-style { margin-left:auto; } .settings-tools { gap:8px; } #open-source { margin-left:0; } #source { width:100%; } }
     `,
-    before: `<header class="settings-head"><div class="settings-heading"><h1>Papper 设置</h1><div id="source" class="muted">正在读取配置…</div></div>
-      <div class="settings-tools"><label for="scope">设置范围</label><select id="scope"><option value="main">当前稿件 / 项目</option><option value="reply">审稿回复覆盖</option></select>
-      <button id="refresh" class="secondary">刷新配置</button><button id="open-source" class="secondary">查看源配置</button></div>
+    before: `<header class="settings-head"><div class="settings-heading"><h1>${htmlMessage("Papper Tools Settings")}</h1><div id="source" class="muted">${htmlMessage("Reading configuration…")}</div></div>
+      <div class="settings-tools"><label for="scope">${htmlMessage("Settings Scope")}</label><select id="scope"><option value="main">${htmlMessage("Current Manuscript / Project")}</option><option value="reply">${htmlMessage("Reviewer Reply Overrides")}</option></select>
+      <button id="refresh" class="secondary">${htmlMessage("Refresh Configuration")}</button><button id="open-source" class="secondary">${htmlMessage("View Source Configuration")}</button></div>
       <div id="message" role="status" aria-live="polite"></div></header>
-      <div class="settings-layout"><nav aria-label="Papper 设置分区">${navigation}</nav><div class="settings-main">
-      <main id="field-page"><div class="section-heading"><h2 id="section-title"></h2><p id="section-help" class="muted">每项单独应用 · 未设置的选项沿用继承或默认值 · 保存源文档后用于下次构建</p></div>
-      <div id="style-picker" hidden><label for="style-name">Word 样式名称</label><input id="style-name" list="style-names" value="Body Text" aria-label="Word 样式名称"><datalist id="style-names"></datalist><button id="choose-style">编辑此样式</button></div>
+      <div class="settings-layout"><nav aria-label="${htmlMessage("Papper Tools settings sections")}">${navigation}</nav><div class="settings-main">
+      <main id="field-page"><div class="section-heading"><h2 id="section-title"></h2><p id="section-help" class="muted">${htmlMessage("Apply each setting individually · Unset options use inherited or default values · Save the source document for the next build")}</p></div>
+      <div id="style-picker" hidden><label for="style-name">${htmlMessage("Word Style Name")}</label><input id="style-name" list="style-names" value="Body Text" aria-label="${htmlMessage("Word Style Name")}"><datalist id="style-names"></datalist><button id="choose-style">${htmlMessage("Edit This Style")}</button></div>
       <div id="fields"></div></main>`,
     after: `</div></div>`,
     script: `
@@ -84,8 +85,8 @@ export function buildPapperSettingsHtml(): string {
       const bibliography = document.getElementById('bibliography');
       const messageNode = document.getElementById('message');
       const drafts = new Map();
-      const labels = ${JSON.stringify(SETTINGS_LABELS)};
-      const groups = ${JSON.stringify(SETTINGS_GROUPS)};
+      const labels = ${serializeLocalization(Object.fromEntries(Object.entries(SETTINGS_LABELS).map(([key, label]) => [key, t(label)])))};
+      const groups = ${serializeLocalization(Object.fromEntries(Object.entries(SETTINGS_GROUPS).map(([key, groups]) => [key, groups.map((group) => ({ ...group, title: t(group.title) }))])))};
       let state;
       let section = 'math';
       /** Reports a setting operation without replacing a field's unsaved input. */
@@ -109,34 +110,34 @@ export function buildPapperSettingsHtml(): string {
         const key = JSON.stringify(row.path);
         const label = document.createElement('label'); label.textContent = labels[row.title] ?? row.description;
         // Shared leaf names such as left/right mean indentation inside a Word style, not page margins.
-        if (row.path.some(part => part === 'indentation')) label.textContent = {left:'左缩进',right:'右缩进'}[row.title] ?? label.textContent;
-        if (section === 'docx' && row.title === 'font') label.textContent = '旧版字体对象';
+        if (row.path.some(part => part === 'indentation')) label.textContent = {left:t("Left Indent"),right:t("Right Indent")}[row.title] ?? label.textContent;
+        if (section === 'docx' && row.title === 'font') label.textContent = t("Legacy Font Object");
         const inputId = 'setting-' + row.path.map(encodeURIComponent).join('-'); label.htmlFor = inputId;
-        const badge = document.createElement('span'); badge.className = 'setting-badge' + (row.configured ? ' configured' : ''); badge.textContent = row.configured ? '已设置' : row.inherited !== undefined ? '继承' : '默认';
+        const badge = document.createElement('span'); badge.className = 'setting-badge' + (row.configured ? ' configured' : ''); badge.textContent = row.configured ? t("Configured") : row.inherited !== undefined ? t("Inherited") : t("Default");
         const heading = document.createElement('div'); heading.className = 'setting-heading';
         const description = document.createElement('span'); description.className = 'setting-description'; description.textContent = row.description; description.hidden = row.description === label.textContent;
         const path = document.createElement('details'); path.className = 'setting-path';
-        const pathSummary = document.createElement('summary'); pathSummary.textContent = '配置字段';
+        const pathSummary = document.createElement('summary'); pathSummary.textContent = t("Configuration Field");
         const pathValue = document.createElement('code'); pathValue.textContent = row.path.join(' › '); path.append(pathSummary,pathValue);
         const info = document.createElement('div'); info.className = 'setting-info'; info.append(label,description);
         const tools = document.createElement('div'); tools.className = 'setting-heading-tools'; tools.append(badge,path); heading.append(info,tools);
         const controls = document.createElement('div'); controls.className = 'setting-controls';
         const input = document.createElement(row.kind === 'boolean' ? 'select' : row.kind === 'yaml' ? 'textarea' : 'input'); input.id = inputId; input.setAttribute('aria-label', row.description);
-        if (row.kind === 'boolean') { for (const [value, title] of [['','继承 / 默认'],['true','开启'],['false','关闭']]) { const option = document.createElement('option'); option.value = value; option.textContent = title; input.append(option); } }
+        if (row.kind === 'boolean') { for (const [value, title] of [['',t("Inherited / Default")],['true',t("On")],['false',t("Off")]]) { const option = document.createElement('option'); option.value = value; option.textContent = title; input.append(option); } }
         else if (row.options?.length && row.kind === 'text') { const options = document.createElement('datalist'); options.id = inputId + '-options'; for (const value of row.options) { const option = document.createElement('option'); option.value = value; options.append(option); } input.setAttribute('list', options.id); container.append(options); }
         input.value = drafts.has(key) ? drafts.get(key) : row.value;
         input.addEventListener('input', () => drafts.set(key,input.value));
-        if (!row.configured && input.tagName !== 'SELECT') input.placeholder = row.inherited ?? '未设置，使用继承或默认值';
-        const save = document.createElement('button'); save.textContent = '应用';
-        const reset = document.createElement('button'); reset.className = 'secondary'; reset.textContent = '恢复继承'; reset.disabled = !row.configured;
+        if (!row.configured && input.tagName !== 'SELECT') input.placeholder = row.inherited ?? t("Unset; using an inherited or default value");
+        const save = document.createElement('button'); save.textContent = t("Apply");
+        const reset = document.createElement('button'); reset.className = 'secondary'; reset.textContent = t("Reset to Inherited"); reset.disabled = !row.configured;
         /** Submits one source edit against the displayed configuration snapshot. */
         function applySetting(resetValue) {
           if (!state) return;
-          if (!resetValue && row.kind === 'boolean' && input.value === '') { status('请选择开启或关闭，或使用恢复继承',true); return; }
+          if (!resetValue && row.kind === 'boolean' && input.value === '') { status(t("Choose On or Off, or use Reset to Inherited"),true); return; }
           vscode.postMessage({type:'settingsSave', path:row.path, input:input.value, reset:resetValue, original:state.content});
         }
         save.addEventListener('click', () => applySetting(false)); reset.addEventListener('click', () => applySetting(true));
-        const note = document.createElement('div'); note.className = 'setting-status muted'; note.hidden = row.configured || row.inherited === undefined; note.textContent = note.hidden ? '' : '继承值：' + row.inherited;
+        const note = document.createElement('div'); note.className = 'setting-status muted'; note.hidden = row.configured || row.inherited === undefined; note.textContent = note.hidden ? '' : t("Inherited value: {0}", row.inherited);
         const actions = document.createElement('div'); actions.className = 'setting-actions'; actions.append(save,reset);
         controls.append(input,actions); container.append(heading,controls,note); return container;
       }
@@ -146,7 +147,7 @@ export function buildPapperSettingsHtml(): string {
           const hasChildren = rows.some(child => child.path.length > row.path.length && row.path.every((key,index) => child.path[index] === key));
           if (!hasChildren) return settingRow(row);
           const editor = document.createElement('details'); editor.className = 'advanced-settings';
-          const summary = document.createElement('summary'); summary.textContent = '直接编辑' + (labels[row.title] ?? row.description) + (row.kind === 'yaml' ? '（YAML）' : '（完整值）');
+          const summary = document.createElement('summary'); summary.textContent = t(row.kind === 'yaml' ? "Edit directly: {0} (YAML)" : "Edit directly: {0} (complete value)", labels[row.title] ?? row.description);
           editor.append(summary,settingRow(row)); return editor;
         }).sort((left,right) => Number(left.tagName === 'DETAILS') - Number(right.tagName === 'DETAILS'));
       }
@@ -155,7 +156,7 @@ export function buildPapperSettingsHtml(): string {
         const nodes = []; const remaining = new Set(rows);
         // Group by the field below the shared scope, so a custom Word style named "font" cannot capture unrelated rows.
         const fieldIndex = Math.min(...rows.map(row => row.path.length)) - 1;
-        const definitions = [...(groups[section] ?? []),{title:'其他设置',keys:[]}];
+        const definitions = [...(groups[section] ?? []),{title:t("Other Settings"),keys:[]}];
         for (const definition of definitions) {
           const selected = [...remaining].filter(row => !definition.keys.length || definition.keys.some(field => field === row.path[fieldIndex]));
           if (!selected.length) continue;
@@ -184,13 +185,13 @@ export function buildPapperSettingsHtml(): string {
           const target = data.section === 'bibliography' ? document.getElementById('csl-config') : document.getElementById('fields');
           if (data.section === 'bibliography') {
             const csl = data.rows.find(row => row.title === 'csl');
-            const more = document.createElement('details'); more.className = 'advanced-settings'; const summary = document.createElement('summary'); summary.textContent = '更多参考文献设置';
+            const more = document.createElement('details'); more.className = 'advanced-settings'; const summary = document.createElement('summary'); summary.textContent = t("More Bibliography Settings");
             more.append(summary,...data.rows.filter(row => row !== csl).map(settingRow)); target.replaceChildren(settingRow(csl),more);
           } else target.replaceChildren(...renderGroups(data.rows));
           if (data.section === 'bibliography') { vscode.postMessage({type:'ready'}); search.focus(); }
-        } else if (data.type === 'settingsSaved') { drafts.delete(JSON.stringify(data.path)); status('已更新配置，可在源文档中撤销；保存后用于下次构建'); }
+        } else if (data.type === 'settingsSaved') { drafts.delete(JSON.stringify(data.path)); status(t("Configuration updated. Undo in the source document if needed; save for the next build")); }
         else if (data.type === 'settingsError') status(data.error,true);
-        else if (data.type === 'sourceChanged') status('源配置已修改。应用前请刷新配置，避免覆盖外部修改');
+        else if (data.type === 'sourceChanged') status(t("The source configuration changed. Refresh before applying to avoid overwriting external changes"));
       });
       navigate('math'); vscode.postMessage({type:'settingsReady'});
     })();

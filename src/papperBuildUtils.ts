@@ -1,3 +1,4 @@
+import { t } from "./localization";
 import * as cp from "child_process";
 import * as fs from "fs/promises";
 import * as path from "path";
@@ -131,7 +132,7 @@ export async function upgradePapper() {
   }
   const uvExecutable = await findExecutableOnPath("uv");
   if (!uvExecutable) {
-    throw new Error("`uv` is not available to upgrade Papper.");
+    throw new Error(t("`uv` is not available to upgrade Papper."));
   }
 
   await runProcess(uvExecutable, ["tool", "upgrade", "papper"], {});
@@ -222,7 +223,7 @@ export async function resolvePapperExecutable(output: vscode.OutputChannel) {
 async function installPapperTool(output: vscode.OutputChannel, upgrade = false) {
   const uvExecutable = await findExecutableOnPath("uv");
   if (!uvExecutable) {
-    throw new Error("`uv` is not available to install or update Papper. Install uv and reload VS Code before retrying.");
+    throw new Error(t("`uv` is not available to install or update Papper. Install uv and reload VS Code before retrying."));
   }
 
   let toolBinDirectory = await runProcess(uvExecutable, ["tool", "dir", "--bin"], { captureStdout: true });
@@ -231,7 +232,7 @@ async function installPapperTool(output: vscode.OutputChannel, upgrade = false) 
     const pathExecutable = await findExecutableOnPath("papper");
     if (pathExecutable && (!installedExecutable || !isSameFsPath(pathExecutable, installedExecutable))) {
       // Updating a hidden uv copy would leave the active Papper version unchanged.
-      throw new Error("The Papper executable on PATH is not managed by uv. Update it with its original package manager.");
+      throw new Error(t("The Papper executable on PATH is not managed by uv. Update it with its original package manager."));
     }
   }
   if (installedExecutable && !upgrade) {
@@ -265,7 +266,7 @@ async function installPapperTool(output: vscode.OutputChannel, upgrade = false) 
   installedExecutable = toolBinDirectory ? await findExecutableInDirectory("papper", toolBinDirectory) : undefined;
   installedExecutable ||= await findExecutableOnPath("papper");
   if (!installedExecutable) {
-    throw new Error("uv installed Papper, but its `papper` executable could not be found on PATH or in uv's tool bin directory.");
+    throw new Error(t("uv installed Papper, but its `papper` executable could not be found on PATH or in uv's tool bin directory."));
   }
 
   cachedPapperExecutable = installedExecutable;

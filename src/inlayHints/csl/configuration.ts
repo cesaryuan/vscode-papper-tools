@@ -1,3 +1,4 @@
+import { t } from "../../localization";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { isAlias, isMap, isScalar, parseDocument, Scalar, YAMLMap } from "yaml";
@@ -14,12 +15,12 @@ export function isCslStyleDocument(document: vscode.TextDocument): boolean {
 /** Validates the metadata scope using exact public field names. */
 export function getCslSettingPath(document: vscode.TextDocument, requested?: unknown): string[] {
   const style = isCslStyleDocument(document);
-  if (!style && !["markdown", "mdx"].includes(document.languageId)) throw new Error("请先打开稿件或 style.yml，再设置参考文献样式");
+  if (!style && !["markdown", "mdx"].includes(document.languageId)) throw new Error(t("Open a manuscript or style.yml before setting the citation style"));
   const keys = requested === undefined ? (style ? ["pandocMetadata", "csl"] : ["csl"]) : requested;
-  if (!Array.isArray(keys) || !keys.every((key) => typeof key === "string")) throw new Error("无效的参考文献样式字段");
+  if (!Array.isArray(keys) || !keys.every((key) => typeof key === "string")) throw new Error(t("Invalid citation style field"));
   const settingPath = keys.join(".");
   const valid = style ? /^(reply\.)?pandocMetadata\.csl$/ : /^(csl|papperSettings\.(reply\.)?pandocMetadata\.csl)$/;
-  if (!valid.test(settingPath)) throw new Error("无效的参考文献样式配置范围");
+  if (!valid.test(settingPath)) throw new Error(t("Invalid citation style configuration scope"));
   return keys;
 }
 
@@ -33,14 +34,14 @@ function parseCslConfiguration(document: vscode.TextDocument, keys: string[]) {
   const text = document.getText();
   const header = isCslStyleDocument(document) ? undefined : getYamlHeader(text);
   const yaml = parseDocument(isCslStyleDocument(document) ? text : header?.content ?? "");
-  if (yaml.errors.length) throw new Error(`参考文献样式配置无法解析：${yaml.errors[0].message}`);
+  if (yaml.errors.length) throw new Error(t("Could not parse the citation style configuration: {0}", yaml.errors[0].message));
   if (!yaml.contents || (isScalar(yaml.contents) && yaml.contents.value === null)) yaml.contents = yaml.createNode({}) as YAMLMap.Parsed;
   let node: unknown = yaml.contents;
   for (let index = 0; index <= keys.length; index++) {
-    if (isAlias(node) || ((isMap(node) || isScalar(node)) && node.anchor)) throw new Error("参考文献样式配置使用了 YAML anchor 或 alias，请先展开后设置");
+    if (isAlias(node) || ((isMap(node) || isScalar(node)) && node.anchor)) throw new Error(t("Expand YAML anchors or aliases before editing the citation style configuration"));
     if (index === keys.length) {
-      if (node !== undefined && !(isScalar(node) && (node.value === null || typeof node.value === "string"))) throw new Error("csl 必须是文件路径文本");
-    } else if (node !== undefined && !isMap(node)) throw new Error("参考文献样式的上级配置必须是对象");
+      if (node !== undefined && !(isScalar(node) && (node.value === null || typeof node.value === "string"))) throw new Error(t("csl must be a file path string"));
+    } else if (node !== undefined && !isMap(node)) throw new Error(t("The parent citation style configuration must be an object"));
     node = isMap(node) ? node.get(keys[index], true) : undefined;
   }
   return { text, header, yaml };
@@ -56,7 +57,7 @@ export async function applyCslConfiguration(document: vscode.TextDocument, keys:
   original: string | undefined, output: vscode.OutputChannel): Promise<void> {
   const sourceEditor = vscode.window.visibleTextEditors.find((editor) => editor.document.uri.toString() === document.uri.toString());
   const editor = await vscode.window.showTextDocument(document, { viewColumn: sourceEditor?.viewColumn ?? vscode.ViewColumn.One, preserveFocus: false, preview: false });
-  if (original !== getCslConfigurationContent(document)) throw new Error("设置期间参考文献样式配置已改变，请重新设置");
+  if (original !== getCslConfigurationContent(document)) throw new Error(t("The citation style configuration changed while editing. Try again"));
   const { text, header, yaml } = parseCslConfiguration(document, keys);
   const previous = yaml.getIn(keys, true);
   if (!isScalar(previous) || previous.value !== value) {
@@ -79,7 +80,7 @@ export async function applyCslConfiguration(document: vscode.TextDocument, keys:
     const applied = await editor.edit(
       /** Groups the chosen scope's change into one Undo operation. */
       (builder) => builder.replace(range, content), { undoStopBefore: true, undoStopAfter: true });
-    if (!applied) throw new Error("VS Code 拒绝了参考文献样式配置编辑");
+    if (!applied) throw new Error(t("VS Code rejected the citation style configuration edit"));
     output.appendLine(`[CSL] Updated ${keys.join(".")} in ${document.uri.fsPath}`);
   }
   const updated = parseCslConfiguration(document, keys);
@@ -97,5 +98,5 @@ export function appendCslConfigurationAction(markdown: vscode.MarkdownString, do
   try { getCslSettingPath(document, keys); } catch { return; }
   const args = encodeURIComponent(JSON.stringify([document.uri.toString(), keys]));
   markdown.isTrusted = { enabledCommands: [SET_CSL_STYLE_COMMAND] };
-  markdown.appendMarkdown(`\n\nPapper Tools: [Set Citation Style](command:${SET_CSL_STYLE_COMMAND}?${args})`);
+  markdown.appendMarkdown(`\n\nPapper Tools: [${t("Set Citation Style")}](command:${SET_CSL_STYLE_COMMAND}?${args})`);
 }

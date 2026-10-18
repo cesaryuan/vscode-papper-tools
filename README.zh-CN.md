@@ -6,6 +6,8 @@
 
 Papper Tools 将引用导航、公式预览、Word 排版设置和引文样式搜索放进 Markdown 编辑器。它是 [Papper](https://github.com/cesaryuan/papper) 的配套 VS Code 扩展，让你在生成 DOCX 之前更方便地修改和检查稿件。
 
+界面跟随 VS Code 的显示语言，目前提供英文默认文案和简体中文翻译，命令统一使用 `Papper Tools:` 前缀。可通过 **Configure Display Language（配置显示语言）** 切换语言，并按提示重启 VS Code；本文中的命令示例使用英文名称。
+
 [安装并配合 AI 使用](#安装并配合-ai-使用) · [写作工具](#写作工具) · [动手试一试](#动手试一试) · [文档导航](#文档导航)
 
 ## 安装并配合 AI 使用

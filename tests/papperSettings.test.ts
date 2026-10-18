@@ -48,7 +48,7 @@ test("settings preserve project and reply scopes, show inherited values and refu
   assert(model.getSettingsStyleNames(project, true, "main").includes("Journal Body"));
   assert.equal(model.getSettingsRows(project, true, "main", "docx", "Journal Body").find((row) => row.title === "fontFamily").value, "Times New Roman");
   assert.throws(() => apply("defaults: &shared {mathtype: false}\nreply: *shared\n", true, ["reply", "mathtype"], "true"), /anchor|alias/);
-  assert.throws(() => apply(project, true, ["arbitrarySetting"], "true"), /不支持/);
+  assert.throws(() => apply(project, true, ["arbitrarySetting"], "true"), /Unsupported/);
 });
 
 /** Models a settings panel's event bridge, allowing actual host lifecycle and user actions to run. */

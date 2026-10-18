@@ -7,6 +7,7 @@
  * for SVG href rewriting and EMF/WMF conversion.
  */
 
+import { t, htmlMessage, getLanguage, getWebviewLocalizationScript } from "../localization";
 import * as path from "path";
 import * as vscode from "vscode";
 import { VisiblePreviewFileWatcher } from "./fileRefreshWatcher";
@@ -58,13 +59,13 @@ export class ImagePreviewSidePanel {
   async open(uri: vscode.Uri | undefined) {
     const imageUri = this.resolveImageUri(uri);
     if (!imageUri) {
-      await vscode.window.showWarningMessage("Open an SVG, EMF, or WMF file before starting image preview.");
+      await vscode.window.showWarningMessage(t("Open an SVG, EMF, or WMF file before starting image preview."));
       return;
     }
 
     const extension = path.extname(imageUri.fsPath).toLowerCase();
     if (!SUPPORTED_IMAGE_EXTENSIONS.has(extension)) {
-      await vscode.window.showWarningMessage("Image preview only supports SVG, EMF, and WMF files.");
+      await vscode.window.showWarningMessage(t("Image preview only supports SVG, EMF, and WMF files."));
       return;
     }
 
@@ -141,7 +142,7 @@ export class ImagePreviewSidePanel {
     const extension = path.extname(imageUri.fsPath).toLowerCase();
     const panel = vscode.window.createWebviewPanel(
       "pandocManuscriptTools.imagePreview",
-      `Preview ${path.basename(imageUri.fsPath)}`,
+      t("Preview {0}", path.basename(imageUri.fsPath)),
       vscode.ViewColumn.Beside,
       createWebviewOptions(imageUri),
     );
@@ -164,13 +165,13 @@ export class ImagePreviewSidePanel {
    */
   async renderPanel(panel: vscode.WebviewPanel, imageUri: vscode.Uri, extension: string) {
     const label = path.basename(imageUri.fsPath);
-    panel.title = `Preview ${label}`;
-    panel.webview.html = buildPanelHtml(`<p class="muted">Rendering ${escapeHtml(label)}...</p>`);
+    panel.title = t("Preview {0}", label);
+    panel.webview.html = buildPanelHtml(`<p class="muted">${htmlMessage("Rendering {0}…", label)}</p>`);
 
     try {
       const previewSource = await renderWebviewPreviewSource(panel.webview, this.imagePreviewRenderer, imageUri, imageUri.fsPath, extension);
       if (!previewSource) {
-        panel.webview.html = buildPanelHtml(`<p class="muted">Preview could not render ${escapeHtml(label)}. See the Papper Tools output for details.</p>`);
+        panel.webview.html = buildPanelHtml(`<p class="muted">${htmlMessage("Preview could not render {0}. See the Papper Tools output for details.", label)}</p>`);
         return;
       }
       if (previewSource.localResourceRoots) {
@@ -179,7 +180,7 @@ export class ImagePreviewSidePanel {
       panel.webview.html = buildPreviewHtml(imageUri.fsPath, previewSource);
     } catch (error) {
       this.output.appendLine(`Image side preview failed for ${imageUri.fsPath}: ${formatError(error)}`);
-      panel.webview.html = buildPanelHtml(`<p class="muted">Preview failed for ${escapeHtml(label)}.</p>`);
+      panel.webview.html = buildPanelHtml(`<p class="muted">${htmlMessage("Preview failed for {0}.", label)}</p>`);
     }
   }
 }
@@ -206,10 +207,10 @@ export function buildPreviewHtml(imagePath: string, previewSource: WebviewPrevie
       <div class="toolbar" role="toolbar">
         ${toolbarActions}
         ${diffToolbarActions}
-        ${buildToolbarButton("out", "Zoom out", buildZoomOutIcon())}
-        ${buildToolbarButton("in", "Zoom in", buildZoomInIcon())}
-        ${buildToolbarButton("actual", "Actual size", buildActualSizeIcon())}
-        ${buildToolbarButton("fit", "Fit to window", buildFitIcon())}
+        ${buildToolbarButton("out", t("Zoom out"), buildZoomOutIcon())}
+        ${buildToolbarButton("in", t("Zoom in"), buildZoomInIcon())}
+        ${buildToolbarButton("actual", t("Actual size"), buildActualSizeIcon())}
+        ${buildToolbarButton("fit", t("Fit to window"), buildFitIcon())}
         <span class="zoomValue" data-zoom-value>100%</span>
       </div>
     </header>
@@ -697,7 +698,7 @@ function getLocalResourceRoots(imageUri: vscode.Uri, additionalRoots: vscode.Uri
  */
 export function buildPanelHtml(body: string, script = ""): string {
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${htmlMessage(getLanguage())}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -867,6 +868,7 @@ export function buildPanelHtml(body: string, script = ""): string {
 function getPreviewScript() {
   return `<script>
 (() => {
+  ${getWebviewLocalizationScript()}
   const vscode = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : undefined;
   const viewport = document.querySelector("[data-preview-viewport]");
   const stage = document.querySelector("[data-preview-stage]");
@@ -1148,7 +1150,7 @@ function getPreviewScript() {
     syncEnabled = message.enabled === true;
     if (syncButton) {
       syncButton.setAttribute("aria-pressed", String(syncEnabled));
-      syncButton.title = syncEnabled ? "Disable synchronized zoom and scroll" : "Synchronize zoom and scroll";
+      syncButton.title = syncEnabled ? t("Disable synchronized zoom and scroll") : t("Synchronize zoom and scroll");
     }
     if (syncEnabled && Number.isFinite(message.scale) && message.scale > 0) {
       synchronizedScale = message.scale;
@@ -1206,7 +1208,7 @@ function getPreviewScript() {
   applyBlobSource();
   if (syncEnabled) {
     syncButton.setAttribute("aria-pressed", "true");
-    syncButton.title = "Disable synchronized zoom and scroll";
+    syncButton.title = t("Disable synchronized zoom and scroll");
   }
   if (syncButton && vscode) {
     // A diff pane can finish loading after linking starts in its counterpart.

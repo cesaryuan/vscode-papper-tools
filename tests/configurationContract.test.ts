@@ -81,11 +81,11 @@ test("completion, hover and settings edits recognize only exact canonical Papper
   for (const name of ["docx-page-width", "docx_page_width", "docxpagewidth", "DocxPageWidth"]) {
     assert.deepEqual(suggestions(api, `${name}: `), []);
     assert.deepEqual(api.completion.getStyleHoverEntries(`${name}: 21cm\n`), []);
-    assert.throws(() => api.settings.createSettingsEdit("", true, [name], "21cm"), /不支持/);
+    assert.throws(() => api.settings.createSettingsEdit("", true, [name], "21cm"), /Unsupported/);
   }
   assert.deepEqual(suggestions(api, "docx-style:\n  Body Text:\n    fontSize: "), []);
   assert.deepEqual(api.header.getMarkdownHeaderHoverEntries("---\npapper-settings:\n  docxPageWidth: 21cm\n---\nBody\n"), []);
-  assert.throws(() => api.settings.createSettingsEdit("Body\n", false, ["papper-settings", "docxPageWidth"], "21cm"), /不支持/);
+  assert.throws(() => api.settings.createSettingsEdit("Body\n", false, ["papper-settings", "docxPageWidth"], "21cm"), /Unsupported/);
   const native = "pandocMetadata:\n  link-citations: ";
   assert(suggestions(api, native).some((item) => item.label === "true"));
 });

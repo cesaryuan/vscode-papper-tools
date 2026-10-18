@@ -1,7 +1,7 @@
 {
   "name": "pandoc-manuscript-tools",
   "displayName": "Papper Tools",
-  "description": "Local VS Code helpers for Pandoc Markdown labels, cross references, math hovers, and outline symbols.",
+  "description": "%extension.description%",
   "version": "0.8.1",
   "publisher": "cesaryuan",
   "license": "GPL-3.0-or-later",
@@ -33,7 +33,7 @@
     "publish:patch": "npm run check && vsce publish patch",
     "publish:minor": "npm run check && vsce publish minor",
     "profile:test-md": "tsx scripts/profile-test-md.ts test.md",
-    "test": "tsx --test tests/parser.test.ts tests/configurationContract.test.ts tests/elementAttributes.test.ts tests/markdownYamlHeader.test.ts tests/manuscriptStyle.test.ts tests/styleConfiguration.test.ts tests/reviewerReplyDefinitions.test.ts tests/inlineFoldParser.test.ts tests/headingStructure.test.ts tests/mathHoverParser.test.ts tests/metafilePreviewAppearance.test.ts tests/metafileResourceCache.test.ts tests/customImagePreviewContext.test.ts tests/pathResolver.test.ts tests/imageDirectoryPreview.test.ts tests/paragraphTranslationDiff.test.ts tests/commentParagraph.test.ts tests/pandocNumbering.test.ts tests/inlayReferences.test.ts tests/inlaySettings.test.ts tests/cslStyles.test.ts tests/papperSettings.test.ts tests/papperToolPolicy.test.ts tests/papperHtmlServer.test.ts tests/papperMarkdownScrollIntent.test.ts tests/papperMarkdownClickNavigation.test.ts tests/papperMarkdownScrollAnchors.test.ts tests/papperMarkdownMathRendering.test.ts tests/papperMarkdownLifecycle.test.ts tests/htmlResourceUris.test.ts tests/paragraphTranslator.test.ts tests/workspaceIndex.test.ts tests/asyncLruCache.test.ts tests/imagePreviewCache.test.ts",
+    "test": "tsx --test tests/parser.test.ts tests/configurationContract.test.ts tests/elementAttributes.test.ts tests/markdownYamlHeader.test.ts tests/manuscriptStyle.test.ts tests/styleConfiguration.test.ts tests/reviewerReplyDefinitions.test.ts tests/inlineFoldParser.test.ts tests/headingStructure.test.ts tests/mathHoverParser.test.ts tests/metafilePreviewAppearance.test.ts tests/metafileResourceCache.test.ts tests/customImagePreviewContext.test.ts tests/pathResolver.test.ts tests/imageDirectoryPreview.test.ts tests/paragraphTranslationDiff.test.ts tests/commentParagraph.test.ts tests/pandocNumbering.test.ts tests/inlayReferences.test.ts tests/inlaySettings.test.ts tests/cslStyles.test.ts tests/papperSettings.test.ts tests/papperToolPolicy.test.ts tests/papperHtmlServer.test.ts tests/papperMarkdownScrollIntent.test.ts tests/papperMarkdownClickNavigation.test.ts tests/papperMarkdownScrollAnchors.test.ts tests/papperMarkdownMathRendering.test.ts tests/papperMarkdownLifecycle.test.ts tests/htmlResourceUris.test.ts tests/paragraphTranslator.test.ts tests/workspaceIndex.test.ts tests/asyncLruCache.test.ts tests/imagePreviewCache.test.ts tests/localization.test.ts",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test && npm run bundle && npm run check:bundle"
   },
@@ -59,7 +59,10 @@
     "assets/papper-configuration.json",
     "assets/libemf2svg/emf2svg.js",
     "assets/libemf2svg/emf2svg.wasm",
-    "assets/mathjax-newcm-font/cjs/svg/dynamic/*.js"
+    "assets/mathjax-newcm-font/cjs/svg/dynamic/*.js",
+    "package.nls.json",
+    "package.nls.*.json",
+    "l10n/**"
   ],
   "dependencies": {
     "@jimp/core": "^1.6.1",
@@ -76,52 +79,52 @@
     "commands": [
       {
         "command": "pandocManuscriptTools.openSettings",
-        "title": "Papper Tools: Open Settings"
+        "title": "%command.openSettings%"
       },
       {
         "command": "pandocManuscriptTools.setCitationStyle",
-        "title": "Papper Tools: Set Citation Style"
+        "title": "%command.setCitationStyle%"
       },
       {
         "command": "pandocManuscriptTools.mergeStyleExample",
-        "title": "Papper Tools: Merge Style Example"
+        "title": "%command.mergeStyleExample%"
       },
       {
         "command": "pandocManuscriptTools.rebuildIndex",
-        "title": "Papper Tools: Rebuild Index"
+        "title": "%command.rebuildIndex%"
       },
       {
         "command": "pandocManuscriptTools.buildDocxAndOpen",
-        "title": "Papper Tools: Build DOCX and Open in Word",
+        "title": "%command.buildDocxAndOpen%",
         "icon": "$(play)"
       },
       {
         "command": "pandocManuscriptTools.buildHtmlAndOpen",
-        "title": "Papper Tools: Preview Markdown (Papper HTML)",
+        "title": "%command.buildHtmlAndOpen%",
         "icon": "$(book)"
       },
       {
         "command": "pandocManuscriptTools.installOrUpdatePapper",
-        "title": "Papper Tools: Install or Update Papper"
+        "title": "%command.installOrUpdatePapper%"
       },
       {
         "command": "pandocManuscriptTools.openImagePreviewToSide",
-        "title": "Papper Tools: Open Image Preview to the Side",
+        "title": "%command.openImagePreviewToSide%",
         "icon": "$(open-preview)"
       },
       {
         "command": "pandocManuscriptTools.openImageDirectoryPreview",
-        "title": "Papper Tools: View Images",
+        "title": "%command.openImageDirectoryPreview%",
         "icon": "$(file-media)"
       },
       {
         "command": "pandocManuscriptTools.openSvgPreview",
-        "title": "Papper Tools: Open SVG Preview",
+        "title": "%command.openSvgPreview%",
         "icon": "$(eye)"
       },
       {
         "command": "pandocManuscriptTools.openSvgSourceText",
-        "title": "Papper Tools: Reopen SVG as Source Text",
+        "title": "%command.openSvgSourceText%",
         "icon": "$(file-code)"
       }
     ],
@@ -193,7 +196,7 @@
     "customEditors": [
       {
         "viewType": "pandocManuscriptTools.metafilePreviewEditor",
-        "displayName": "Metafile Preview",
+        "displayName": "%editor.metafilePreviewEditor%",
         "selector": [
           {
             "filenamePattern": "*.emf"
@@ -206,7 +209,7 @@
       },
       {
         "viewType": "pandocManuscriptTools.svgPreviewEditor",
-        "displayName": "SVG Preview",
+        "displayName": "%editor.svgPreviewEditor%",
         "selector": [
           {
             "filenamePattern": "*.svg"
@@ -221,86 +224,86 @@
         "pandocManuscriptTools.enableDiagnostics": {
           "type": "boolean",
           "default": true,
-          "description": "Report undefined Pandoc cross references and duplicate labels in open Markdown documents."
+          "description": "%configuration.enableDiagnostics%"
         },
         "pandocManuscriptTools.enableNumberInlayHints": {
           "type": "boolean",
           "default": true,
-          "description": "Show section, equation, figure, and table numbers plus actual bibliography and cross-reference text from Papper's processed Pandoc AST in Markdown inlay hints."
+          "description": "%configuration.enableNumberInlayHints%"
         },
         "pandocManuscriptTools.includeWorkspaceReferences": {
           "type": "boolean",
           "default": false,
-          "description": "Preload Markdown files in the current workspace for the index cache. Lookups remain scoped to the active document except that reply_to_reviewers.md also uses definitions from the workspace-root manuscript.md."
+          "description": "%configuration.includeWorkspaceReferences%"
         },
         "pandocManuscriptTools.includeLabelSymbols": {
           "type": "boolean",
           "default": true,
-          "description": "Add equation, figure, and table labels as nested outline symbols below their nearest heading."
+          "description": "%configuration.includeLabelSymbols%"
         },
         "pandocManuscriptTools.highlightFencedDivs": {
           "type": "boolean",
           "default": true,
-          "description": "Highlight Pandoc fenced div blocks with subtle whole-line background colors."
+          "description": "%configuration.highlightFencedDivs%"
         },
         "pandocManuscriptTools.highlightBracketedSpans": {
           "type": "boolean",
           "default": true,
-          "description": "Highlight Pandoc bracketed spans with subtle inline background colors."
+          "description": "%configuration.highlightBracketedSpans%"
         },
         "pandocManuscriptTools.foldLineExcerptCodeSpans": {
           "type": "boolean",
           "default": true,
-          "description": "Fold the backtick-delimited excerpt in Markdown annotations such as (Line `quoted text`) until the cursor enters it."
+          "description": "%configuration.foldLineExcerptCodeSpans%"
         },
         "pandocManuscriptTools.foldRevisionCharSpanAttributes": {
           "type": "boolean",
           "default": true,
-          "description": "Fold the attribute block in Pandoc spans whose custom-style value is exactly Revision Char until the cursor enters it."
+          "description": "%configuration.foldRevisionCharSpanAttributes%"
         },
         "pandocManuscriptTools.enableInlineMathParagraphHover": {
           "type": "boolean",
           "default": false,
-          "description": "Show a paragraph-level hover preview when hovering over a Markdown paragraph that contains inline math."
+          "description": "%configuration.enableInlineMathParagraphHover%"
         },
         "pandocManuscriptTools.inlineMathParagraphHoverMaxCharacters": {
           "type": "number",
           "default": 5000,
           "minimum": 1,
-          "description": "Maximum paragraph length, in characters, that can show an inline-math paragraph hover preview."
+          "description": "%configuration.inlineMathParagraphHoverMaxCharacters%"
         },
         "pandocManuscriptTools.enableParagraphHoverTranslation": {
           "type": "boolean",
           "default": true,
-          "description": "Show translations for eligible English Markdown paragraphs and nearby code comments, using Google Translate when available and Microsoft Translator as a fallback."
+          "description": "%configuration.enableParagraphHoverTranslation%"
         },
         "pandocManuscriptTools.debugParagraphHoverTranslation": {
           "type": "boolean",
           "default": false,
-          "description": "Log complete paragraph translation requests and responses for debugging. Disabled by default to keep output concise."
+          "description": "%configuration.debugParagraphHoverTranslation%"
         },
         "pandocManuscriptTools.enableDiffAwareParagraphHoverTranslation": {
           "type": "boolean",
           "default": true,
-          "description": "When VS Code exposes diff information, mark added or removed sentences in paragraph translation hovers with the editor's diff colors."
+          "description": "%configuration.enableDiffAwareParagraphHoverTranslation%"
         },
         "pandocManuscriptTools.paragraphHoverTranslationMaxCharacters": {
           "type": "number",
           "default": 5000,
           "minimum": 1,
-          "description": "Maximum English paragraph length, in characters, that can request a paragraph hover translation."
+          "description": "%configuration.paragraphHoverTranslationMaxCharacters%"
         },
         "pandocManuscriptTools.paragraphHoverTranslationTargetLanguage": {
           "type": "string",
           "default": "zh",
-          "description": "Target language code for paragraph hover translations, for example zh or zh-TW."
+          "description": "%configuration.paragraphHoverTranslationTargetLanguage%"
         },
         "pandocManuscriptTools.imageDirectoryPreviewScanDepth": {
           "type": "number",
           "scope": "resource",
           "default": -1,
           "minimum": -1,
-          "description": "Maximum subfolder depth scanned by Image Directory Preview. Use -1 for unlimited recursion, 0 for only the selected folder, or a positive integer for that many subfolder levels."
+          "description": "%configuration.imageDirectoryPreviewScanDepth%"
         },
         "pandocManuscriptTools.imageDirectoryPreviewIncludedFolderKeywords": {
           "type": "array",
@@ -309,7 +312,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Only include images whose root-relative folder path contains one of these case-insensitive keywords. Leave empty to include all folders not excluded."
+          "description": "%configuration.imageDirectoryPreviewIncludedFolderKeywords%"
         },
         "pandocManuscriptTools.imageDirectoryPreviewExcludedFolderKeywords": {
           "type": "array",
@@ -318,7 +321,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Skip folders whose root-relative path contains one of these case-insensitive keywords. Exclusion takes precedence over inclusion."
+          "description": "%configuration.imageDirectoryPreviewExcludedFolderKeywords%"
         }
       }
     }
@@ -330,5 +333,6 @@
     "esbuild": "^0.28.0",
     "tsx": "^4.23.0",
     "typescript": "^7.0.1-rc"
-  }
+  },
+  "l10n": "./l10n"
 }

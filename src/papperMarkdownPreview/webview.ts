@@ -1,3 +1,4 @@
+import { getWebviewLocalizationScript } from "../localization";
 import * as crypto from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
@@ -111,6 +112,7 @@ export function injectHtmlPreviewBridge(html: string, nonce: string, cspSource: 
   const csp = buildHtmlPreviewCsp(preparedMath.html, nonce, cspSource);
   // String.raw preserves regex backslashes in the embedded browser script.
   const bridge = String.raw`<meta http-equiv="Content-Security-Policy" content="${csp}"><script nonce="${nonce}">
+${getWebviewLocalizationScript()}
 const vscode = acquireVsCodeApi();
 let suppressScroll = false;
 let scrollFrame = 0;
@@ -546,7 +548,7 @@ function ensureImageLightbox() {
   imageLightbox = document.createElement('div');
   imageLightbox.setAttribute('role', 'dialog');
   imageLightbox.setAttribute('aria-modal', 'true');
-  imageLightbox.setAttribute('aria-label', 'Image preview');
+  imageLightbox.setAttribute('aria-label', t('Image preview'));
   imageLightbox.tabIndex = -1;
   // Keep a light checkerboard behind transparent SVGs so black labels remain readable.
   imageLightbox.style.cssText = 'position:fixed;inset:0;z-index:2147483646;background-color:#f3f3f3;background-image:linear-gradient(45deg,#e1e1e1 25%,transparent 25%,transparent 75%,#e1e1e1 75%),linear-gradient(45deg,#e1e1e1 25%,transparent 25%,transparent 75%,#e1e1e1 75%),linear-gradient(45deg,transparent 25%,#e1e1e1 25%,#e1e1e1 75%,transparent 75%),linear-gradient(45deg,transparent 25%,#e1e1e1 25%,#e1e1e1 75%,transparent 75%);background-position:0 0,10px 10px,10px 0,0 10px;background-size:20px 20px;display:none;font-family:var(--vscode-font-family,sans-serif);';
@@ -565,10 +567,10 @@ function ensureImageLightbox() {
     button.addEventListener('mouseleave', () => { button.style.background = 'transparent'; });
     return button;
   };
-  const zoomOut = makeButton('Zoom out', '−');
-  const zoomIn = makeButton('Zoom in', '+');
-  const fit = makeButton('Fit image to window', 'Fit');
-  const close = makeButton('Close image preview', '×');
+  const zoomOut = makeButton(t('Zoom out'), '−');
+  const zoomIn = makeButton(t('Zoom in'), '+');
+  const fit = makeButton(t('Fit image to window'), t('Fit'));
+  const close = makeButton(t('Close image preview'), '×');
   imageLightboxZoomValue = document.createElement('span');
   imageLightboxZoomValue.style.cssText = 'min-width:42px;padding:0 4px;text-align:center;font-size:12px;font-variant-numeric:tabular-nums;';
   zoomOut.addEventListener('click', () => setImageLightboxZoom(imageLightboxZoom / 1.2));

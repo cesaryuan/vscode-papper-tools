@@ -5,6 +5,7 @@
  * "Reopen With" preview so source text remains the default SVG editor.
  */
 
+import { t, htmlMessage } from "../localization";
 import * as path from "path";
 import * as vscode from "vscode";
 import { OPEN_SVG_SOURCE_TEXT_COMMAND } from "../constants";
@@ -111,10 +112,10 @@ export class MetafilePreviewCustomEditorProvider implements vscode.Disposable {
     webviewPanel.webview.options = {
       enableScripts: true,
     };
-    webviewPanel.webview.html = buildPanelHtml(`<p class="muted">Rendering ${escapeHtml(label)}...</p>`);
+    webviewPanel.webview.html = buildPanelHtml(`<p class="muted">${htmlMessage("Rendering {0}…", label)}</p>`);
 
     if (!SUPPORTED_IMAGE_EXTENSIONS.has(extension)) {
-      webviewPanel.webview.html = buildPanelHtml("<p class=\"muted\">This custom editor only supports SVG, EMF, and WMF files.</p>");
+      webviewPanel.webview.html = buildPanelHtml(`<p class="muted">${htmlMessage("This custom editor only supports SVG, EMF, and WMF files.")}</p>`);
       return;
     }
 
@@ -194,12 +195,12 @@ export class MetafilePreviewCustomEditorProvider implements vscode.Disposable {
     if (extension === ".svg" && this.svgDiffPanels.has(webviewPanel)) {
       this.clearSvgDiffHighlight(document.uri);
     }
-    webviewPanel.webview.html = buildPanelHtml(`<p class="muted">Rendering ${escapeHtml(label)}...</p>`);
+    webviewPanel.webview.html = buildPanelHtml(`<p class="muted">${htmlMessage("Rendering {0}…", label)}</p>`);
 
     try {
       const previewSource = await renderCustomEditorPreviewSource(webviewPanel.webview, this.imagePreviewRenderer, document.uri, imagePath, extension, this.output);
       if (!previewSource) {
-        webviewPanel.webview.html = buildPanelHtml(`<p class="muted">Preview could not render ${escapeHtml(label)}. See the Papper Tools output for details.</p>`);
+        webviewPanel.webview.html = buildPanelHtml(`<p class="muted">${htmlMessage("Preview could not render {0}. See the Papper Tools output for details.", label)}</p>`);
         return;
       }
       if (previewSource.localResourceRoots) {
@@ -211,11 +212,11 @@ export class MetafilePreviewCustomEditorProvider implements vscode.Disposable {
 
       webviewPanel.webview.html = buildPreviewHtml(imagePath, previewSource, {
         toolbarActions: extension === ".svg"
-          ? buildPreviewActionButton(OPEN_SVG_SOURCE_TEXT_COMMAND, "Source Text", buildSourceTextIcon())
+          ? buildPreviewActionButton(OPEN_SVG_SOURCE_TEXT_COMMAND, t("Source Text"), buildSourceTextIcon())
           : "",
         diffToolbarActions: extension === ".svg"
-          ? buildPreviewActionButton(TOGGLE_SVG_DIFF_HIGHLIGHT_COMMAND, "Highlight changed areas", buildDiffHighlightIcon())
-            + buildPreviewActionButton(TOGGLE_SVG_ZOOM_SYNC_COMMAND, "Synchronize zoom and scroll", buildSynchronizedZoomIcon())
+          ? buildPreviewActionButton(TOGGLE_SVG_DIFF_HIGHLIGHT_COMMAND, t("Highlight changed areas"), buildDiffHighlightIcon())
+            + buildPreviewActionButton(TOGGLE_SVG_ZOOM_SYNC_COMMAND, t("Synchronize zoom and scroll"), buildSynchronizedZoomIcon())
           : "",
         showDiffToolbarActions: this.svgDiffPanels.has(webviewPanel),
         additionalScript: extension === ".svg" ? buildSvgDiffHighlightScript() : "",
@@ -223,7 +224,7 @@ export class MetafilePreviewCustomEditorProvider implements vscode.Disposable {
       });
     } catch (error) {
       this.output.appendLine(`Image custom editor preview failed for ${imagePath}: ${formatError(error)}`);
-      webviewPanel.webview.html = buildPanelHtml(`<p class="muted">Preview failed for ${escapeHtml(label)}.</p>`);
+      webviewPanel.webview.html = buildPanelHtml(`<p class="muted">${htmlMessage("Preview failed for {0}.", label)}</p>`);
     }
   }
 
@@ -273,7 +274,7 @@ export class MetafilePreviewCustomEditorProvider implements vscode.Disposable {
   private async toggleSvgDiffHighlight(uri: vscode.Uri): Promise<void> {
     const pair = this.findSvgDiffPair(uri);
     if (!pair) {
-      await vscode.window.showInformationMessage("Open this SVG in a diff editor to highlight changed areas.");
+      await vscode.window.showInformationMessage(t("Open this SVG in a diff editor to highlight changed areas."));
       return;
     }
     const pairKey = [pair.original.toString(), pair.modified.toString()].sort().join("\n");
@@ -295,7 +296,7 @@ export class MetafilePreviewCustomEditorProvider implements vscode.Disposable {
         ]);
       } catch (error) {
         this.output.appendLine(`SVG diff highlight failed: ${formatError(error)}`);
-        await vscode.window.showWarningMessage("Could not read both SVG revisions for highlighting. See Papper Tools output.");
+        await vscode.window.showWarningMessage(t("Could not read both SVG revisions for highlighting. See Papper Tools output."));
       }
       return;
     }
@@ -316,7 +317,7 @@ export class MetafilePreviewCustomEditorProvider implements vscode.Disposable {
   private async toggleSvgZoomSync(uri: vscode.Uri, scale: number | undefined, scrollX: number | undefined, scrollY: number | undefined): Promise<void> {
     const pair = this.findSvgDiffPair(uri);
     if (!pair) {
-      await vscode.window.showInformationMessage("Open this SVG in a diff editor to synchronize zoom.");
+      await vscode.window.showInformationMessage(t("Open this SVG in a diff editor to synchronize zoom."));
       return;
     }
     const key = svgDiffPairKey(pair);

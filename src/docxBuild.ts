@@ -1,3 +1,4 @@
+import { t } from "./localization";
 import * as fs from "fs/promises";
 import * as http from "http";
 import * as crypto from "crypto";
@@ -28,25 +29,25 @@ export class PandocBuildRunner {
     // An inactive editor title action must save/build its own resource, not the focused file.
     const document = uri ? await vscode.workspace.openTextDocument(uri) : vscode.window.activeTextEditor?.document;
     if (!document || !isBuildableMarkdownDocument(document)) {
-      vscode.window.showWarningMessage("Open a saved Markdown file before building DOCX.");
+      vscode.window.showWarningMessage(t("Open a saved Markdown file before building DOCX."));
       return;
     }
 
     if (!(await isPapperBuildAvailable())) {
-      vscode.window.showErrorMessage("Cannot build DOCX because `papper` is not on PATH and `uv` is not available to install it.");
+      vscode.window.showErrorMessage(t("Cannot build DOCX because `papper` is not on PATH and `uv` is not available to install it."));
       return;
     }
 
     const saved = await document.save();
     if (!saved) {
-      vscode.window.showWarningMessage("The Markdown file must be saved before building DOCX.");
+      vscode.window.showWarningMessage(t("The Markdown file must be saved before building DOCX."));
       return;
     }
 
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: `正在转换 DOCX：${path.basename(document.uri.fsPath)}`,
+        title: t("Converting DOCX: {0}", path.basename(document.uri.fsPath)),
         cancellable: false,
       },
       /** Keeps progress indeterminate until preparation, conversion, and opening finish. */
@@ -82,19 +83,19 @@ export class PandocBuildRunner {
       this.output.appendLine(`[DOCX] Resolved executable: ${papperExecutable}`);
       await runProcess(papperExecutable, args, { cwd: project.rootUri.fsPath, output: this.output });
       if (!(await pathExists(docxUri))) {
-        throw new Error(`Build finished, but the expected DOCX was not found: ${docxUri.fsPath}`);
+        throw new Error(t("Build finished, but the expected DOCX was not found: {0}", docxUri.fsPath));
       }
 
       // Word opens asynchronously; keep the temporary file after the command returns.
       const opened = await openDocxInLocalWord(docxUri, this.output);
       if (!opened) {
-        throw new Error(`VS Code could not open the DOCX in local Word: ${docxUri.fsPath}`);
+        throw new Error(t("VS Code could not open the DOCX in local Word: {0}", docxUri.fsPath));
       }
 
       this.output.appendLine(`[DOCX] Opened ${docxUri.fsPath}`);
-      vscode.window.setStatusBarMessage(`$(check) Built and opened ${path.basename(docxUri.fsPath)}.`, 5000);
+      vscode.window.setStatusBarMessage(t("$(check) Built and opened {0}.", path.basename(docxUri.fsPath)), 5000);
     } catch (error) {
-      const message = `Failed to build DOCX: ${String(error.message || error)}`;
+      const message = t("Failed to build DOCX: {0}", String(error.message || error));
       this.output.appendLine(`[DOCX] ${message}`);
       vscode.window.showErrorMessage(message);
     }
@@ -137,7 +138,7 @@ async function openDocxInLocalWord(docxUri: vscode.Uri, output: vscode.OutputCha
   }
 
   if (vscode.env.uiKind === vscode.UIKind.Web) {
-    throw new Error("Opening local Word is not available from the VS Code web UI.");
+    throw new Error(t("Opening local Word is not available from the VS Code web UI."));
   }
 
   const downloadServer = await createRemoteDocxDownloadServer(docxUri, output);

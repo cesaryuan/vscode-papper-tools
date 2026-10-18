@@ -161,5 +161,5 @@ test("a hover setting never overwrites metadata edited while its prompt is open"
   assert.equal(fixture.getEdits(), 0);
   assert.equal(fixture.getText(), concurrent);
   assert.equal(fixture.getSelectedText(), undefined);
-  assert.match(fixture.errors[0], /YAML header 已改变/);
+  assert.match(fixture.errors[0], /YAML header changed/);
 });

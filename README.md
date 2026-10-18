@@ -6,6 +6,8 @@
 
 Papper Tools brings reference navigation, equation previews, Word formatting controls, and citation-style search into your Markdown editor. It is the VS Code companion to [Papper](https://github.com/cesaryuan/papper), which builds your manuscript as DOCX.
 
+The interface follows VS Code's display language, with English defaults and Simplified Chinese translations. Commands use the consistent `Papper Tools:` prefix. Change the editor language with **Configure Display Language**, then restart VS Code when prompted.
+
 [Install and use with AI](#install-and-use-with-ai) · [Writing tools](#writing-tools) · [Try-it examples](#try-it-examples) · [Documentation](#documentation)
 
 ## Install and use with AI

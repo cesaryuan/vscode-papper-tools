@@ -1,3 +1,5 @@
+import { localizeDescription } from "../localizedDescriptions";
+import { t } from "../localization";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { parseDocument, isScalar } from "yaml";
@@ -24,7 +26,7 @@ export class PapperSettingsController implements vscode.Disposable {
     try {
       const uri = uriText === undefined ? vscode.window.activeTextEditor?.document.uri ?? (this.lastSource ? vscode.Uri.parse(this.lastSource) : undefined)
         : typeof uriText === "string" ? vscode.Uri.parse(uriText) : uriText instanceof vscode.Uri ? uriText : undefined;
-      if (!uri || uri.scheme !== "file") throw new Error("请先打开本地稿件或 style.yml，再打开 Papper 设置");
+      if (!uri || uri.scheme !== "file") throw new Error(t("Open a local manuscript or style.yml before opening Papper Tools Settings"));
       const document = await vscode.workspace.openTextDocument(uri);
       getCslSettingPath(document);
       const key = uri.toString();
@@ -37,7 +39,7 @@ export class PapperSettingsController implements vscode.Disposable {
       await session.navigate(section, cslPath);
     } catch (error) {
       this.output.appendLine(`[Settings] Could not open settings: ${String(error)}`);
-      void vscode.window.showErrorMessage(`打开 Papper 设置失败：${error instanceof Error ? error.message : String(error)}`);
+      void vscode.window.showErrorMessage(t("Could not open Papper Tools Settings: {0}", error instanceof Error ? error.message : String(error)));
     }
   }
 
@@ -65,7 +67,7 @@ class SettingsSession implements vscode.Disposable {
   constructor(private readonly document: vscode.TextDocument, private readonly output: vscode.OutputChannel,
     private readonly csl: CslStyleController, private readonly onClose: () => void,
     private readonly ensureConfiguration: () => Promise<void> = async () => {}) {
-    this.panel = vscode.window.createWebviewPanel("pandocManuscriptTools.settings", "Papper 设置", vscode.ViewColumn.Active,
+    this.panel = vscode.window.createWebviewPanel("pandocManuscriptTools.settings", t("Papper Tools Settings"), vscode.ViewColumn.Active,
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] });
     this.subscriptions.push(this.panel.onDidDispose(() => this.dispose()));
     this.subscriptions.push(attachZoteroSearch(this.panel.webview, csl.repository,
@@ -139,8 +141,8 @@ class SettingsSession implements vscode.Disposable {
     this.displayedContent = getCslConfigurationContent(this.document);
     void this.panel.webview.postMessage({ type: "settingsState", uri: this.document.uri.toString(), section: this.section,
       scope: this.scope, styleName: this.styleName, styleNames: getSettingsStyleNames(this.document.getText(), style, this.scope, this.inherited),
-      title: SETTINGS_SECTIONS.find((section) => section.id === this.section).title,
-      sourceLabel: `${style ? "项目设置" : "稿件设置"} · ${this.document.uri.fsPath}`, content: this.displayedContent, rows });
+      title: t(SETTINGS_SECTIONS.find((section) => section.id === this.section).title),
+      sourceLabel: `${style ? t("Project settings") : t("Manuscript settings")} · ${this.document.uri.fsPath}`, content: this.displayedContent, rows: rows.map((row) => ({ ...row, description: localizeDescription(row.description) })) });
   }
 
   /** Handles validated settings operations; external YAML changes require refresh instead of being overwritten. */
@@ -157,15 +159,15 @@ class SettingsSession implements vscode.Disposable {
       await this.refresh();
     } else if (request.type === "settingsSource") await vscode.window.showTextDocument(this.document, { preview: false });
     else if (request.type === "settingsSave") {
-      if (this.busy) throw new Error("正在应用设置，请稍后再试");
-      if (typeof request.input !== "string" || !Array.isArray(request.path)) throw new Error("无效的设置请求");
-      if (request.original !== getCslConfigurationContent(this.document)) throw new Error("源配置已改变，请先刷新后再应用");
+      if (this.busy) throw new Error(t("Settings are being applied. Please try again shortly"));
+      if (typeof request.input !== "string" || !Array.isArray(request.path)) throw new Error(t("Invalid settings request"));
+      if (request.original !== getCslConfigurationContent(this.document)) throw new Error(t("The source configuration changed. Refresh before applying"));
       this.busy = true;
       try {
         const edit = createSettingsEdit(this.document.getText(), isCslStyleDocument(this.document), request.path as string[], request.input, request.reset === true);
         const workspaceEdit = new vscode.WorkspaceEdit();
         workspaceEdit.replace(this.document.uri, new vscode.Range(this.document.positionAt(edit.start), this.document.positionAt(edit.end)), edit.text);
-        if (!await vscode.workspace.applyEdit(workspaceEdit)) throw new Error("VS Code 拒绝了配置编辑");
+        if (!await vscode.workspace.applyEdit(workspaceEdit)) throw new Error(t("VS Code rejected the configuration edit"));
         this.output.appendLine(`[Settings] ${request.reset ? "Reset" : "Updated"} ${(request.path as string[]).join(".")} in ${this.document.uri.fsPath}`);
         void this.panel.webview.postMessage({ type: "settingsSaved", path: request.path });
         await this.refresh();

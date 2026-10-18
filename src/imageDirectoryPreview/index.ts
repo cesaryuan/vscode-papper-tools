@@ -8,6 +8,7 @@
  * bitmaps near the viewport.
  */
 
+import { t, htmlMessage, getLanguage, getWebviewLocalization, serializeLocalization } from "../localization";
 import * as path from "path";
 import * as vscode from "vscode";
 import { IMAGE_DIRECTORY_PREVIEW_VIEW_TYPE } from "../constants";
@@ -80,7 +81,7 @@ export class ImageDirectoryPreview {
     // Explorer contributes the selected URI, while the command palette can use the workspace root.
     const directoryUri = uri || vscode.workspace.workspaceFolders?.[0]?.uri;
     if (!directoryUri) {
-      await vscode.window.showWarningMessage("Select a folder in the Explorer or open a workspace before viewing images.");
+      await vscode.window.showWarningMessage(t("Select a folder in the Explorer or open a workspace before viewing images."));
       return;
     }
     this.output.appendLine(`Opening Image Directory Preview build 0.5.0 for ${directoryUri.toString()}`);
@@ -88,12 +89,12 @@ export class ImageDirectoryPreview {
     try {
       const stat = await vscode.workspace.fs.stat(directoryUri);
       if (!isDirectory(stat.type)) {
-        await vscode.window.showWarningMessage("Papper Tools: View Images only supports folders.");
+        await vscode.window.showWarningMessage(t("Papper Tools: View Images only supports folders."));
         return;
       }
     } catch (error) {
       this.output.appendLine(`Image directory preview could not inspect ${directoryUri.toString()}: ${formatError(error)}`);
-      await vscode.window.showWarningMessage("The selected folder could not be opened.");
+      await vscode.window.showWarningMessage(t("The selected folder could not be opened."));
       return;
     }
 
@@ -106,7 +107,7 @@ export class ImageDirectoryPreview {
 
     const panel = vscode.window.createWebviewPanel(
       IMAGE_DIRECTORY_PREVIEW_VIEW_TYPE,
-      `Images: ${getUriBaseName(directoryUri)}`,
+      t("Images: {0}", getUriBaseName(directoryUri)),
       vscode.ViewColumn.Active,
       {
         enableScripts: true,
@@ -294,7 +295,7 @@ class DirectoryPreviewSession {
       this.output.appendLine(`Image directory preview updated scan depth to ${this.scanDepth === -1 ? "unlimited" : this.scanDepth} for ${this.rootUri.toString()}`);
     } catch (error) {
       this.output.appendLine(`Image directory preview could not save settings for ${this.rootUri.toString()}: ${formatError(error)}`);
-      await this.panel.webview.postMessage({ type: "notice", text: "Settings apply to this preview, but could not be saved." });
+      await this.panel.webview.postMessage({ type: "notice", text: t("Settings apply to this preview, but could not be saved.") });
     }
     await this.resetScanner();
   }
@@ -348,15 +349,15 @@ class DirectoryPreviewSession {
     }
     const relativePath = getWorkspaceRelativePath(imageUri);
     if (!relativePath) {
-      await this.panel.webview.postMessage({ type: "notice", text: "Cannot copy a workspace-relative path because this image is outside the workspace." });
+      await this.panel.webview.postMessage({ type: "notice", text: t("Cannot copy a workspace-relative path because this image is outside the workspace.") });
       return;
     }
     try {
       await vscode.env.clipboard.writeText(relativePath);
-      await this.panel.webview.postMessage({ type: "notice", text: `Copied ${relativePath}` });
+      await this.panel.webview.postMessage({ type: "notice", text: t("Copied {0}", relativePath) });
     } catch (error) {
       this.output.appendLine(`Image directory preview could not copy ${imageUri.toString()}: ${formatError(error)}`);
-      await vscode.window.showErrorMessage("Could not copy the image path.");
+      await vscode.window.showErrorMessage(t("Could not copy the image path."));
     }
   }
 
@@ -369,10 +370,10 @@ class DirectoryPreviewSession {
     const absolutePath = imageUri.fsPath;
     try {
       await vscode.env.clipboard.writeText(absolutePath);
-      await this.panel.webview.postMessage({ type: "notice", text: `Copied ${absolutePath}` });
+      await this.panel.webview.postMessage({ type: "notice", text: t("Copied {0}", absolutePath) });
     } catch (error) {
       this.output.appendLine(`Image directory preview could not copy ${imageUri.toString()}: ${formatError(error)}`);
-      await vscode.window.showErrorMessage("Could not copy the image path.");
+      await vscode.window.showErrorMessage(t("Could not copy the image path."));
     }
   }
 
@@ -394,11 +395,11 @@ class DirectoryPreviewSession {
 
     const fileName = getUriBaseName(imageUri);
     const confirmation = await vscode.window.showWarningMessage(
-      `Move "${fileName}" to the Recycle Bin?`,
+      t("Move \"{0}\" to the Recycle Bin?", fileName),
       { modal: true },
-      "Move to Recycle Bin",
+      t("Move to Recycle Bin"),
     );
-    if (confirmation !== "Move to Recycle Bin") {
+    if (confirmation !== t("Move to Recycle Bin")) {
       return;
     }
 
@@ -408,7 +409,7 @@ class DirectoryPreviewSession {
       await this.panel.webview.postMessage({ type: "imageDeleted", resourceUri: imageUri.toString() });
     } catch (error) {
       this.output.appendLine(`Image directory preview could not delete ${imageUri.toString()}: ${formatError(error)}`);
-      await vscode.window.showErrorMessage(`Could not delete ${fileName}.`);
+      await vscode.window.showErrorMessage(t("Could not delete {0}.", fileName));
     }
   }
 
@@ -600,11 +601,11 @@ function buildDirectoryPreviewHtml(webview: vscode.Webview, rootUri: vscode.Uri,
   const rootLabel = getUriDisplayPath(rootUri);
   const securityMarkup = buildDirectoryPreviewWebviewSecurityMarkup(webview.cspSource, scriptUri.toString());
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${htmlMessage(getLanguage())}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Images: ${escapeHtml(getUriBaseName(rootUri))}</title>
+  <title>${htmlMessage("Images: {0}", getUriBaseName(rootUri))}</title>
   ${securityMarkup}
   <style>
     :root { --thumbnail-size: 180px; --gallery-columns: 4; --card-gap: 14px; }
@@ -661,7 +662,7 @@ function buildDirectoryPreviewHtml(webview: vscode.Webview, rootUri: vscode.Uri,
     /* Masonry keeps a bounded measured height, unlike Grid and Folder natural-ratio cards. */
     #gallery.layout-masonry .thumbnail { height: var(--masonry-thumbnail-height, calc(var(--thumbnail-size) * .75)); min-height: 0; max-height: none; flex: 0 0 auto; aspect-ratio: auto; }
     #gallery.layout-masonry .thumbnail img { height: 100%; max-height: none; object-fit: contain; }
-    .image-card.is-failed .thumbnail::after { content: "Preview unavailable"; padding: 12px; color: var(--vscode-descriptionForeground); text-align: center; }
+    .image-card.is-failed .thumbnail::after { content: ${serializeLocalization(t("Preview unavailable"))}; padding: 12px; color: var(--vscode-descriptionForeground); text-align: center; }
     .image-card.is-failed img { display: none; }
     .caption { flex: 0 0 auto; overflow: hidden; padding: 7px 9px; color: var(--vscode-foreground); border-top: 1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border, rgba(127,127,127,.35))); font-size: .9em; text-overflow: ellipsis; white-space: nowrap; }
     /* Fixed positioning keeps this side popover out of the card and out of the scroller's clipping box. */
@@ -693,16 +694,16 @@ function buildDirectoryPreviewHtml(webview: vscode.Webview, rootUri: vscode.Uri,
   <div class="page">
     <header class="toolbar">
       <span class="root" title="${escapeAttribute(rootLabel)}">${escapeHtml(rootLabel)}</span>
-      <label class="control" for="layout">Layout <select id="layout" aria-label="Layout"><option value="grid">Grid</option><option value="masonry">Masonry</option><option value="folders">By folder</option></select></label>
-      <label class="control" for="column-count">Cols <input id="column-count" type="range" min="1" max="12" step="1" value="4" aria-label="Number of columns"><output id="column-value">4</output></label>
-      <button id="collapse-folders" type="button" hidden>Collapse folders</button>
-      <button id="expand-folders" type="button" hidden>Expand folders</button>
-      <button id="continue-scan" type="button" hidden>Continue scan</button>
-      <button id="rescan" type="button" title="Start a new incremental scan">Refresh</button>
-      <button id="settings" class="icon-button" type="button" title="Directory preview settings" aria-label="Directory preview settings">⚙</button>
-      <span id="status" role="status">Starting directory preview (build 0.5.0)…</span>
+      <label class="control" for="layout">${htmlMessage("Layout")} <select id="layout" aria-label="${htmlMessage("Layout")}"><option value="grid">${htmlMessage("Grid")}</option><option value="masonry">${htmlMessage("Masonry")}</option><option value="folders">${htmlMessage("By folder")}</option></select></label>
+      <label class="control" for="column-count">${htmlMessage("Cols")} <input id="column-count" type="range" min="1" max="12" step="1" value="4" aria-label="${htmlMessage("Number of columns")}"><output id="column-value">4</output></label>
+      <button id="collapse-folders" type="button" hidden>${htmlMessage("Collapse folders")}</button>
+      <button id="expand-folders" type="button" hidden>${htmlMessage("Expand folders")}</button>
+      <button id="continue-scan" type="button" hidden>${htmlMessage("Continue scan")}</button>
+      <button id="rescan" type="button" title="${htmlMessage("Start a new incremental scan")}">${htmlMessage("Refresh")}</button>
+      <button id="settings" class="icon-button" type="button" title="${htmlMessage("Directory preview settings")}" aria-label="${htmlMessage("Directory preview settings")}">⚙</button>
+      <span id="status" role="status">${htmlMessage("Starting directory preview (build 0.5.0)…")}</span>
     </header>
-    <main id="scroll" aria-label="Directory images">
+    <main id="scroll" aria-label="${htmlMessage("Directory images")}">
       <div id="top-spacer"></div>
       <section id="gallery" class="layout-grid" aria-live="polite"></section>
       <div id="bottom-spacer"></div>
@@ -710,33 +711,34 @@ function buildDirectoryPreviewHtml(webview: vscode.Webview, rootUri: vscode.Uri,
   </div>
   <dialog id="directory-settings" aria-labelledby="settings-title">
     <form class="settings-content" method="dialog">
-      <h2 id="settings-title">Directory preview settings</h2>
-      <p>Keywords match root-relative folder paths case-insensitively. Excluded folders always take priority.</p>
-      <label class="settings-field" for="scan-depth">Scan depth
+      <h2 id="settings-title">${htmlMessage("Directory preview settings")}</h2>
+      <p>${htmlMessage("Keywords match root-relative folder paths case-insensitively. Excluded folders always take priority.")}</p>
+      <label class="settings-field" for="scan-depth">${htmlMessage("Scan depth")}
         <input id="scan-depth" type="number" min="-1" step="1" value="-1" required aria-describedby="scan-depth-help">
-        <small id="scan-depth-help">-1 scans all nested folders. 0 scans only this folder. Positive values allow that many subfolder levels.</small>
+        <small id="scan-depth-help">${htmlMessage("-1 scans all nested folders. 0 scans only this folder. Positive values allow that many subfolder levels.")}</small>
       </label>
-      <label class="settings-field" for="included-folder-keywords">Allowed folder keywords
+      <label class="settings-field" for="included-folder-keywords">${htmlMessage("Allowed folder keywords")}
         <textarea id="included-folder-keywords" spellcheck="false" placeholder="figures&#10;supplement"></textarea>
-        <small>One per line or comma-separated. Leave empty to include all folders not excluded.</small>
+        <small>${htmlMessage("One per line or comma-separated. Leave empty to include all folders not excluded.")}</small>
       </label>
-      <label class="settings-field" for="excluded-folder-keywords">Excluded folder keywords
+      <label class="settings-field" for="excluded-folder-keywords">${htmlMessage("Excluded folder keywords")}
         <textarea id="excluded-folder-keywords" spellcheck="false" placeholder="node_modules&#10;archive"></textarea>
-        <small>Matching folders and their children are not scanned.</small>
+        <small>${htmlMessage("Matching folders and their children are not scanned.")}</small>
       </label>
       <div class="settings-actions">
-        <button id="close-settings" type="button">Cancel</button>
-        <button id="apply-settings" type="button">Apply and rescan</button>
+        <button id="close-settings" type="button">${htmlMessage("Cancel")}</button>
+        <button id="apply-settings" type="button">${htmlMessage("Apply and rescan")}</button>
       </div>
     </form>
   </dialog>
   <div id="image-context-menu" role="menu" hidden>
-    <button id="copy-image" type="button" role="menuitem">Copy image</button>
-    <button id="copy-relative-path" type="button" role="menuitem">Copy workspace-relative path</button>
-    <button id="copy-absolute-path" type="button" role="menuitem">Copy absolute path</button>
-    <button id="delete-image" class="danger" type="button" role="menuitem">Move to Recycle Bin…</button>
+    <button id="copy-image" type="button" role="menuitem">${htmlMessage("Copy image")}</button>
+    <button id="copy-relative-path" type="button" role="menuitem">${htmlMessage("Copy workspace-relative path")}</button>
+    <button id="copy-absolute-path" type="button" role="menuitem">${htmlMessage("Copy absolute path")}</button>
+    <button id="delete-image" class="danger" type="button" role="menuitem">${htmlMessage("Move to Recycle Bin…")}</button>
   </div>
   <div id="notice" role="status" hidden></div>
+  <script id="preview-localization" type="application/json">${getWebviewLocalization()}</script>
   <!-- Kept as non-executing raw text while the external controller owns startup. -->
   <script type="application/x-directory-preview-legacy">
   (() => {

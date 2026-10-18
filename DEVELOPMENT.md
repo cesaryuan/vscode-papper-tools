@@ -38,6 +38,36 @@ aliases, navigation sections and mutual-exclusion rules. UI labels and grouping
 remain extension presentation data. This integration does not implement a full
 JSON Schema validator or resolve manuscript configuration precedence.
 
+## Interface localization
+
+English is the source language. VS Code selects the interface language at startup;
+the extension currently provides Simplified Chinese (`zh-cn`) translations and
+falls back to English for other languages or missing entries.
+
+- Manifest strings use `%key%` references in `package.json`, with English values
+  in `package.nls.json` and translations in `package.nls.zh-cn.json`.
+- Runtime messages use `t("Complete English message", argument)` from
+  `src/localization.ts`. Keep variable text in positional placeholders such as
+  `{0}` so translations can reorder it. The host delegates to `vscode.l10n.t`;
+  `l10n/bundle.l10n.json` records English messages and
+  `l10n/bundle.l10n.zh-cn.json` contains their translations.
+- Webviews receive the selected bundle through the localization helpers. Use
+  `htmlMessage` for static HTML text/attributes, `serializeLocalization` for
+  script data and `textContent` for dynamic DOM text. Inline controllers use
+  `getWebviewLocalizationScript`; the directory preview initializes its bundled
+  controller from a non-executable JSON element.
+- `src/schemaDescriptions.json` maps known Chinese descriptions from Papper's
+  exported contract to English source messages. Translate descriptions at the
+  UI boundary with `localizeDescription`; unknown descriptions remain verbatim
+  so new or custom Papper contracts retain their help text. Update this mapping
+  and the language bundles when the upstream descriptions change.
+
+Keep command IDs, configuration keys, enumeration values, Word style names,
+paths and manuscript content independent of the interface language. Adding a
+locale requires matching manifest and runtime translation files, which are
+included by the existing package file rules. Localization tests check fallback,
+placeholder handling, safe Webview rendering and locale-independent source edits.
+
 ## Build and Package
 
 The editable extension sources live in `src/` as TypeScript. Helper scripts in `scripts/` are also TypeScript and run through `tsx`.

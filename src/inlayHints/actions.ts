@@ -1,3 +1,4 @@
+import { t } from "../localization";
 import * as vscode from "vscode";
 import { getYamlHeader } from "../manuscriptStyle/document";
 import { createManuscriptMetadataEdit, getBuiltMetadataValue, getManuscriptMetadataRange, getManuscriptMetadataValue, INLAY_METADATA_FIELDS, isInlayMetadataField, isInlayMetadataValue, type InlayMetadataField, type InlayMetadataValue } from "./settings";
@@ -12,14 +13,14 @@ export async function applyInlayMetadataSetting(document: vscode.TextDocument, f
     viewColumn: sourceEditor?.viewColumn ?? vscode.ViewColumn.One, preserveFocus: false, preview: false,
   });
   // Prompts and downloads can outlive a user's metadata edits; preserve those changes rather than overwriting them.
-  if (originalHeader !== getYamlHeader(document.getText())?.content) throw new Error("设置期间 YAML header 已改变，请重新点击按钮");
+  if (originalHeader !== getYamlHeader(document.getText())?.content) throw new Error(t("The YAML header changed while editing. Click the button again"));
   const edit = createManuscriptMetadataEdit(document.getText(), field, value);
   if (edit) {
     const range = new vscode.Range(document.positionAt(edit.start), document.positionAt(edit.end));
     const applied = await editor.edit(
       /** Replaces only frontmatter in a single Undo operation; body text remains untouched. */
       (builder) => builder.replace(range, edit.text), { undoStopBefore: true, undoStopAfter: true });
-    if (!applied) throw new Error("VS Code 拒绝了 YAML header 编辑");
+    if (!applied) throw new Error(t("VS Code rejected the YAML header edit"));
     output.appendLine(`[Inlay hints] Updated ${field} in manuscript header: ${document.uri.fsPath}`);
   }
   // Reparse after serialization because inserted fields and normalized YAML change source offsets.
@@ -39,9 +40,9 @@ export function appendInlayMetadataActions(tooltip: vscode.MarkdownString, uriTe
     if (index) tooltip.appendMarkdown(" · ");
     const command = field === "csl" ? SET_CSL_STYLE_COMMAND : SET_INLAY_METADATA_COMMAND;
     const args = encodeURIComponent(JSON.stringify(field === "csl" ? [uriText] : [uriText, field, getBuiltMetadataValue(ast, field)]));
-    tooltip.appendMarkdown(`[Set ${INLAY_METADATA_FIELDS[field]}](command:${command}?${args})`);
+    tooltip.appendMarkdown(`[${t("Set {0}", t(INLAY_METADATA_FIELDS[field]))}](command:${command}?${args})`);
   }
-  tooltip.appendMarkdown(fields.includes("csl") ? "\n\nApplies to citations and the bibliography in the current manuscript" : "\n\nApplies to references or captions of the same type in the current manuscript");
+  tooltip.appendMarkdown(fields.includes("csl") ? t("\n\nApplies to citations and the bibliography in the current manuscript") : t("\n\nApplies to references or captions of the same type in the current manuscript"));
 }
 
 /** Opens editing controls only on click, then applies one undoable manuscript-header edit. */
@@ -52,11 +53,11 @@ export class InlayMetadataController {
   /** Edits a documented prefix/title field without changing styles or another active document. */
   async setMetadata(uriText: unknown, requested: unknown, builtValue: unknown): Promise<void> {
     try {
-      if (typeof uriText !== "string" || !isInlayMetadataField(requested)) throw new Error("无效的引用或题注设置请求");
+      if (typeof uriText !== "string" || !isInlayMetadataField(requested)) throw new Error(t("Invalid reference or caption settings request"));
       const uri = vscode.Uri.parse(uriText);
-      if (uri.scheme !== "file") throw new Error("引用和题注设置仅支持本地 Markdown 文档");
+      if (uri.scheme !== "file") throw new Error(t("Reference and caption settings require a local Markdown document"));
       const document = await vscode.workspace.openTextDocument(uri);
-      if (document.languageId !== "markdown") throw new Error("请在 Markdown 文档中设置引用或题注");
+      if (document.languageId !== "markdown") throw new Error(t("Open a Markdown document to configure references or captions"));
       const originalHeader = getYamlHeader(document.getText())?.content;
       const current = getManuscriptMetadataValue(document.getText(), requested)
         ?? (isInlayMetadataValue(builtValue) ? builtValue : "");
@@ -65,7 +66,7 @@ export class InlayMetadataController {
       await applyInlayMetadataSetting(document, requested, value, originalHeader, this.output);
     } catch (error) {
       this.output.appendLine(`[Inlay hints] Could not set reference/caption metadata: ${String(error)}`);
-      void vscode.window.showErrorMessage(`设置引用或题注失败：${error instanceof Error ? error.message : String(error)}`);
+      void vscode.window.showErrorMessage(t("Could not configure references or captions: {0}", error instanceof Error ? error.message : String(error)));
     }
   }
 
@@ -74,10 +75,10 @@ export class InlayMetadataController {
     const values = Array.isArray(current) ? current : [current];
     const updated: string[] = [];
     for (const [index, value] of values.entries()) {
-      const variant = Array.isArray(current) ? ` (${index === 0 ? "Singular" : index === 1 ? "Plural" : `Form ${index + 1}`})` : "";
+      const variant = Array.isArray(current) ? ` (${index === 0 ? t("Singular") : index === 1 ? t("Plural") : t("Form {0}", index + 1)})` : "";
       const result = await vscode.window.showInputBox({
-        title: `Papper Tools: Set ${INLAY_METADATA_FIELDS[field]}${variant}`,
-        prompt: `${field}: Applies to references or captions of the same type in the current manuscript; leave empty to remove the prefix`,
+        title: t("Papper Tools: Set {0}{1}", t(INLAY_METADATA_FIELDS[field]), variant),
+        prompt: t("{0}: Applies to references or captions of the same type in the current manuscript; leave empty to remove the prefix", field),
         value, ignoreFocusOut: true,
       });
       if (result === undefined) return undefined;

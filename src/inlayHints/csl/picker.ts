@@ -1,8 +1,9 @@
+import { t } from "../../localization";
 import * as vscode from "vscode";
 import type { ZoteroStyle, ZoteroStyleRepository } from "./zotero";
 import { renderZoteroPreview } from "./previewHtml";
 
-const FORMAT_LABELS: Record<string, string> = { numeric: "数字编号", "author-date": "作者年份", author: "作者", note: "脚注", label: "标签" };
+const FORMAT_LABELS: Record<string, string> = { numeric: "Numeric", "author-date": "Author-date", author: "Author", note: "Note", label: "Label" };
 
 /** Keeps same-named styles from different libraries distinct in selection and preview messages. */
 function styleIdentity(style: ZoteroStyle): string { return style.source === "chinese" ? `chinese/${style.name}` : style.name; }
@@ -17,7 +18,7 @@ export function searchZoteroStyles(styles: ZoteroStyle[], query: string): Zotero
     return [title, style.name, style.titleShort?.toLocaleLowerCase()].includes(normalized) ? 0 : title.startsWith(normalized) ? 1 : 2;
   };
   return styles.filter((style) => {
-    const searchable = `${style.title} ${style.titleShort ?? ""} ${style.name} ${style.searchText ?? ""} ${style.source === "chinese" ? "Zotero 中文社区" : "Zotero 官方"}`.toLocaleLowerCase();
+    const searchable = `${style.title} ${style.titleShort ?? ""} ${style.name} ${style.searchText ?? ""} ${style.source === "chinese" ? "Zotero 中文社区 Zotero Chinese community" : "Zotero 官方 Zotero official"}`.toLocaleLowerCase();
     return terms.every((term) => searchable.includes(term));
   }).sort((left, right) => score(left) - score(right) || left.title.localeCompare(right.title));
 }
@@ -48,7 +49,7 @@ export function attachZoteroSearch(webview: vscode.Webview, repository: ZoteroSt
     if (!ready || !styles || closed) return;
     const matches = searchZoteroStyles(styles, query);
     void webview.postMessage({ type: "results", revision, count: matches.length, styles: matches.slice(0, 100).map((style) => ({
-      name: styleIdentity(style), title: style.title, description: [style.source === "chinese" ? "Zotero 中文社区" : "Zotero 官方", style.titleShort, FORMAT_LABELS[style.format] ?? style.format].filter(Boolean).join(" · "),
+      name: styleIdentity(style), title: style.title, description: [style.source === "chinese" ? t("Zotero Chinese community") : t("Zotero official"), style.titleShort, FORMAT_LABELS[style.format] ? t(FORMAT_LABELS[style.format]) : style.format].filter(Boolean).join(" · "),
     })) });
   };
   /** Loads only the current preview and prevents slower previous requests from replacing it. */

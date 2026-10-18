@@ -1,3 +1,5 @@
+import { localizeDescription } from "./localizedDescriptions";
+import { t } from "./localization";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { isMap, isScalar, isSeq, isAlias, YAMLMap, parseDocument, visit } from "yaml";
@@ -37,7 +39,7 @@ function fieldsAtPath(pathParts: string[], rootFields: Record<string, StyleField
     const field = fields[pathParts[index]];
     if (field?.dynamicChildren) {
       if (index === pathParts.length - 1) {
-        return Object.fromEntries(COMMON_DOCX_STYLES.map((name) => [name, { description: "Word 内置或常用样式；也可输入任意自定义样式名" }]));
+        return Object.fromEntries(COMMON_DOCX_STYLES.map((name) => [name, { description: t("Built-in and common Word styles; custom style names are also supported") }]));
       }
       index += 1; // DOCX style names are user-defined, including quoted names and Chinese aliases.
       fields = DOCX_STYLE_FIELDS;
@@ -208,9 +210,10 @@ export function createConfigurationCompletionItems(document: vscode.TextDocument
     item.range = new vscode.Range(document.positionAt(suggestion.start), document.positionAt(suggestion.end));
     // Show the setting's purpose in the suggestion row without requiring the details popup.
     const valuesHint = suggestion.values?.length ? suggestion.values.join(" / ") : undefined;
-    item.detail = suggestion.description + (valuesHint ? `（${valuesHint}）` : "");
-    const documentation = new vscode.MarkdownString(suggestion.description);
-    if (valuesHint) documentation.appendText(`\n\n取值提示：${valuesHint}`);
+    item.detail = localizeDescription(suggestion.description) + (valuesHint ? ` (${valuesHint})` : "");
+    const documentation = new vscode.MarkdownString();
+    documentation.appendText(localizeDescription(suggestion.description));
+    if (valuesHint) documentation.appendText(t("\n\nValue hints: {0}", valuesHint));
     item.documentation = documentation;
     return item;
   });
@@ -233,7 +236,7 @@ function hoverField(pathParts: string[], key: string, rootFields: Record<string,
   const ownerFields = fieldsAtPath(pathParts.slice(0, -1), rootFields);
   const owner = ownerFields?.[pathParts.at(-1) ?? ""];
   if (owner?.dynamicChildren) {
-    return { description: "DOCX 段落或字符样式；按精确样式名称应用，可在本节设置字体、对齐、缩进和段落间距" };
+    return { description: t("DOCX paragraph or character styles; applied by exact name, with font, alignment, indentation and paragraph spacing settings") };
   }
   if (owner?.dynamicValueDescription) return { description: owner.dynamicValueDescription };
   return undefined;
@@ -311,9 +314,9 @@ export class StyleConfigurationHoverProvider implements vscode.HoverProvider {
 /** Renders YAML field help safely for either a style file or a Markdown header. */
 export function createConfigurationHover(document: vscode.TextDocument, info: StyleHoverInfo): vscode.Hover {
   const markdown = new vscode.MarkdownString();
-  markdown.appendMarkdown("**Papper 配置帮助**\n\n");
-  markdown.appendText(info.description);
-  if (info.values?.length) markdown.appendText(`\n\n取值提示：${info.values.join(" / ")}`);
+  markdown.appendMarkdown(t("**Papper Configuration Help**\n\n"));
+  markdown.appendText(localizeDescription(info.description));
+  if (info.values?.length) markdown.appendText(t("\n\nValue hints: {0}", info.values.join(" / ")));
   if (info.path.at(-1)?.toLowerCase() === "csl") appendCslConfigurationAction(markdown, document, info.path);
   return new vscode.Hover(markdown, new vscode.Range(document.positionAt(info.start), document.positionAt(info.end)));
 }
@@ -324,7 +327,7 @@ export class StyleConfigurationCodeLensProvider implements vscode.CodeLensProvid
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
     if (!isStyleConfigurationDocument(document)) return [];
     return [new vscode.CodeLens(new vscode.Range(0, 0, 0, 0), {
-      title: "Papper Tools: Merge Style Example",
+      title: t("Papper Tools: Merge Style Example"),
       command: "pandocManuscriptTools.mergeStyleExample",
       arguments: [document.uri],
     })];
@@ -354,9 +357,9 @@ function mergeYamlMaps(target: YAMLMap, source: YAMLMap, fields: Record<string, 
 export function mergeStyleExample(currentText: string, exampleText: string): { text: string; addedKeys: number } {
   const current = parseDocument(currentText.replace(/\r\n/g, "\n"));
   const example = parseDocument(exampleText.replace(/\r\n/g, "\n"));
-  if (current.errors.length) throw new Error(`当前 style.yml 无法解析：${current.errors[0].message}`);
-  if (example.errors.length) throw new Error(`示例 style.yml 无法解析：${example.errors[0].message}`);
-  if (!isMap(example.contents)) throw new Error("示例 style.yml 必须是 YAML 对象");
+  if (current.errors.length) throw new Error(t("Could not parse the current style.yml: {0}", current.errors[0].message));
+  if (example.errors.length) throw new Error(t("Could not parse the example style.yml: {0}", example.errors[0].message));
+  if (!isMap(example.contents)) throw new Error(t("The example style.yml must be a YAML object"));
   const emptyScalar = isScalar(current.contents) && current.contents.value === null && current.contents.source === "";
   if (!current.contents || emptyScalar) {
     if (!currentText.trim()) return { text: exampleText, addedKeys: example.contents.items.length };
@@ -368,7 +371,7 @@ export function mergeStyleExample(currentText: string, exampleText: string): { t
     const text = current.toString({ lineWidth: 0 });
     return { text: currentText.includes("\r\n") ? text.replace(/\n/g, "\r\n") : text, addedKeys: example.contents.items.length };
   }
-  if (!isMap(current.contents)) throw new Error("当前 style.yml 顶层必须是 YAML 对象");
+  if (!isMap(current.contents)) throw new Error(t("The current style.yml must be a YAML object"));
   const addedKeys = mergeYamlMaps(current.contents, example.contents, STYLE_FIELDS);
   if (!addedKeys) return { text: currentText, addedKeys: 0 };
   if (example.comment && !current.comment?.includes(example.comment)) {
@@ -383,7 +386,7 @@ export async function mergeStyleExampleIntoEditor(editor: vscode.TextEditor, out
   const exampleText = getConfigurationContract().templates.styleProject;
   const result = mergeStyleExample(editor.document.getText(), exampleText);
   if (result.text === editor.document.getText()) {
-    void vscode.window.showInformationMessage("当前 style.yml 已包含示例配置");
+    void vscode.window.showInformationMessage(t("The current style.yml already contains the example configuration"));
     return;
   }
   const fullRange = new vscode.Range(editor.document.positionAt(0), editor.document.positionAt(editor.document.getText().length));
@@ -391,8 +394,8 @@ export async function mergeStyleExampleIntoEditor(editor: vscode.TextEditor, out
     /** Groups the merge into one edit so a single Undo restores the original buffer. */
     (edit) => edit.replace(fullRange, result.text),
     { undoStopBefore: true, undoStopAfter: true });
-  if (!applied) throw new Error("VS Code 拒绝了 style.yml 编辑");
+  if (!applied) throw new Error(t("VS Code rejected the style.yml edit"));
   output.appendLine(`Merged ${result.addedKeys} missing style.yml keys into ${editor.document.uri.fsPath}.`);
-  void vscode.window.showInformationMessage(`已合并示例配置，新增 ${result.addedKeys} 项`);
+  void vscode.window.showInformationMessage(t("Merged the example configuration and added {0} entries", result.addedKeys));
 }
 

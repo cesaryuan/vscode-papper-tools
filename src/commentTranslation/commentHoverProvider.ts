@@ -1,3 +1,4 @@
+import { t } from "../localization";
 import * as vscode from "vscode";
 import { getConfiguration } from "../configuration";
 import { CommentParagraphScanner, isTranslatableCommentText } from "./commentParagraph";
@@ -41,7 +42,7 @@ export class CommentHoverProvider implements vscode.HoverProvider, vscode.Dispos
       }
       const markdown = new vscode.MarkdownString();
       const engine = translation.engine === "google" ? "Google Translate" : "Microsoft Translator";
-      markdown.appendMarkdown(`**Comment translation** (${engine})\n\n`);
+      markdown.appendMarkdown(t("**Comment translation** ({0})\n\n", engine));
       markdown.appendText(translation.text);
       return new vscode.Hover(markdown, toRange(paragraph.range));
     } catch (error) {

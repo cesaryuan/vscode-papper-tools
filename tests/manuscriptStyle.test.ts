@@ -51,9 +51,9 @@ function preservesUnrepresentableWordFormatting(): void {
   assert.equal(caption.values.lineSpacing, undefined);
   assert.equal(caption.values.fontColor, undefined);
   assert.equal((caption.values.paragraphSpacing as Record<string, string>).before, undefined);
-  assert.match(caption.notes.lineSpacing, /至少 18pt/);
+  assert.match(caption.notes.lineSpacing, /At least 18pt/);
   assert.match(caption.notes.fontColor, /auto/);
-  assert.match(caption.notes["paragraphSpacing.before"], /自动/);
+  assert.match(caption.notes["paragraphSpacing.before"], /automatic/);
 }
 
 /** Verifies header creation and updates preserve exact manuscript body, BOM, comments and user overrides. */
@@ -99,8 +99,8 @@ function editsFrontmatterWithoutLosingContent(): void {
 
 /** Refuses malformed frontmatter rather than silently discarding existing document metadata. */
 function rejectsInvalidMetadata(): void {
-  assert.throws(() => addManuscriptStyle("---\ntitle: x\nBody", "正文文本", {}), /结束分隔符/);
-  assert.throws(() => addManuscriptStyle("---\npapperSettings: text\n---\nBody", "正文文本", {}), /对象/);
+  assert.throws(() => addManuscriptStyle("---\ntitle: x\nBody", "正文文本", {}), /closing/);
+  assert.throws(() => addManuscriptStyle("---\npapperSettings: text\n---\nBody", "正文文本", {}), /object/);
   assert.throws(() => addManuscriptStyle("---\npapperSettings:\n  docxStyle: &styles {}\n  other: *styles\n---\nBody", "正文文本", {}), /anchor/);
 }
 

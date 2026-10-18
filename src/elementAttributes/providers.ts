@@ -1,3 +1,5 @@
+import { localizeDescription } from "../localizedDescriptions";
+import { t } from "../localization";
 /** Exposes exported attribute help in local and unsaved Markdown/MDX documents. */
 import * as vscode from "vscode";
 import { getConfigurationRevision } from "../configurationContract";
@@ -7,10 +9,10 @@ import { getAttributeSuggestions, getAttributeHoverEntries, type AttributeHelp, 
 /** Escapes descriptions from an executable export rather than enabling trusted Markdown commands. */
 function documentation(help: AttributeHelp): vscode.MarkdownString {
   const markdown = new vscode.MarkdownString();
-  markdown.appendText(help.description);
-  if (help.targets.length) markdown.appendText(`\n\n输出格式：${help.targets.join("、")}`);
-  if (help.values.length) markdown.appendText(`\n\n取值 / 示例：${help.values.map((value) => JSON.stringify(value)).join("、")}`);
-  if (help.aliases.length) markdown.appendText(`\n\n其他合法写法：${help.aliases.join("、")}`);
+  markdown.appendText(localizeDescription(help.description));
+  if (help.targets.length) markdown.appendText(t("\n\nOutput formats: {0}", help.targets.join(", ")));
+  if (help.values.length) markdown.appendText(t("\n\nValues / examples: {0}", help.values.map((value) => JSON.stringify(value)).join(", ")));
+  if (help.aliases.length) markdown.appendText(t("\n\nOther valid forms: {0}", help.aliases.join(", ")));
   return markdown;
 }
 
@@ -57,7 +59,7 @@ export class ElementAttributeProvider implements vscode.CompletionItemProvider, 
         snippet.appendPlaceholder("");
         snippet.appendText(suggestion.insertText.slice(suggestion.placeholder));
         item.insertText = snippet;
-        item.command = { command: "editor.action.triggerSuggest", title: "Complete Papper attribute value" };
+        item.command = { command: "editor.action.triggerSuggest", title: t("Complete Papper attribute value") };
       } else item.insertText = suggestion.insertText;
       return item;
     });

@@ -108,7 +108,7 @@ function handlesUnfinishedHeaders(): void {
   const source = "---\npapperSettings:\n  docxStyle:\n    Body Text:\n      bo<cursor>";
   const accepted = acceptCompletion(source, "bold");
   assert.equal(parse(getYamlHeader(accepted, true).content).papperSettings.docxStyle["Body Text"].bold, null);
-  assert.throws(() => getYamlHeader(accepted), /结束分隔符/);
+  assert.throws(() => getYamlHeader(accepted), /closing/);
   assert.ok(hoverAt("---\npapperSettings:\n  mathtype: f<cursor>alse\n").entry);
   assert.equal(hoverAt("---\ntitle: Pa<cursor>per\nbroken: [\n").entry?.currentValue, "Paper");
 }

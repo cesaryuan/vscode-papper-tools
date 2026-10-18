@@ -6,6 +6,8 @@
  * elements without depending on source line numbers or element IDs.
  */
 
+import { getWebviewLocalizationScript } from "../localization";
+
 export const TOGGLE_SVG_DIFF_HIGHLIGHT_COMMAND = "pandocManuscriptTools.toggleSvgDiffHighlight";
 
 /** Builds the SVG element comparison and overlay script for a preview webview. */
@@ -27,6 +29,7 @@ export function buildSvgDiffHighlightScript(): string {
     .svgDiffStatus { color: var(--vscode-descriptionForeground); font-size: 0.85em; white-space: nowrap; }
   </style><script>
 (() => {
+  ${getWebviewLocalizationScript()}
   const frame = document.querySelector('[data-preview-kind="inline-svg"]');
   const button = document.querySelector('[data-preview-command="pandocManuscriptTools.toggleSvgDiffHighlight"]');
   if (!frame || !button) return;
@@ -195,7 +198,7 @@ export function buildSvgDiffHighlightScript(): string {
       overlay.appendChild(box);
       count += 1;
     }
-    status.textContent = count ? count + " changed area" + (count === 1 ? "" : "s") : "No changed elements on this side";
+    status.textContent = count ? t(count === 1 ? "{0} changed area" : "{0} changed areas", count) : t("No changed elements on this side");
   }
 
   /** Coalesces resize and zoom updates into one layout measurement. */
@@ -214,7 +217,7 @@ export function buildSvgDiffHighlightScript(): string {
     if (!message || message.type !== "svgDiffHighlight") return;
     enabled = message.enabled === true;
     button.setAttribute("aria-pressed", String(enabled));
-    button.title = enabled ? "Hide changed areas" : "Highlight changed areas";
+    button.title = enabled ? t("Hide changed areas") : t("Highlight changed areas");
     if (!enabled) {
       highlightedPaths = [];
       status.textContent = "";
@@ -224,7 +227,7 @@ export function buildSvgDiffHighlightScript(): string {
     const current = parseSvg(message.currentSvg);
     const other = parseSvg(message.otherSvg);
     if (!current || !other || current.localName !== "svg" || other.localName !== "svg") {
-      status.textContent = "SVG could not be compared";
+      status.textContent = t("SVG could not be compared");
       enabled = false;
       button.setAttribute("aria-pressed", "false");
       scheduleRegions();

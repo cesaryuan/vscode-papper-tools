@@ -1,3 +1,4 @@
+import { t } from "../localization";
 import { unzipSync, strFromU8 } from "fflate";
 import { DOMParser } from "@xmldom/xmldom";
 
@@ -58,7 +59,7 @@ function readValues(properties: Map<string, XmlElement>, theme: XmlElement | und
     const themeBinding = attribute(fonts, binding);
     const font = themeBinding ? themeFont(theme, themeBinding, language) : attribute(fonts, direct);
     if (font) fontFamily[key] = font;
-    else if (themeBinding) notes[`fontFamily.${key}`] = `主题 ${themeBinding}（未指定可解析的字体）`;
+    else if (themeBinding) notes[`fontFamily.${key}`] = t("Theme {0} (no resolvable font specified)", themeBinding);
   }
   if (Object.keys(fontFamily).length) values.fontFamily = fontFamily;
   const size = attribute(properties.get("sz"), "val");
@@ -67,26 +68,26 @@ function readValues(properties: Map<string, XmlElement>, theme: XmlElement | und
   if (bold || type === "paragraph") values.bold = Boolean(bold && !/^(?:0|false|off)$/i.test(attribute(bold, "val") ?? "true"));
   const color = attribute(properties.get("color"), "val");
   if (color && /^[\da-f]{6}$/i.test(color)) values.fontColor = `#${color.toUpperCase()}`;
-  else notes.fontColor = color === "auto" ? "auto（Word 自动颜色）" : "未指定（Word 自动颜色）";
+  else notes.fontColor = color === "auto" ? t("auto (Word automatic color)") : t("Unspecified (Word automatic color)");
   const colorTheme = attribute(properties.get("color"), "themeColor");
   if (colorTheme) {
     // Theme/tint/shade must not be frozen to the fallback RGB stored alongside the theme binding.
     delete values.fontColor;
-    notes.fontColor = `主题 ${colorTheme}（保留主题颜色）`;
+    notes.fontColor = t("Theme {0} (theme color preserved)", colorTheme);
   }
   // Inline styles overlay their containing paragraph; absent run properties must keep inheriting from it.
   if (type === "character") return { values, notes };
   const justification = attribute(properties.get("jc"), "val") ?? "left";
   const alignment = ({ both: "justify", start: "left", end: "right" } as Record<string, string>)[justification] ?? justification;
   if (["left", "center", "right", "justify", "distribute"].includes(alignment)) values.alignment = alignment;
-  else notes.alignment = `${justification}（Papper 无等价配置）`;
+  else notes.alignment = t("{0} (no equivalent Papper setting)", justification);
   const spacing = properties.get("spacing");
   const paragraphSpacing: Record<string, string> = {};
   for (const name of ["before", "after"]) {
     const auto = attribute(spacing, `${name}Autospacing`);
     const lines = attribute(spacing, `${name}Lines`);
-    if (auto && !/^(?:0|false|off)$/.test(auto)) notes[`paragraphSpacing.${name}`] = "Word 自动段间距（Papper 无等价配置）";
-    else if (lines !== undefined) notes[`paragraphSpacing.${name}`] = `${Number(lines) / 100} 行（Papper 仅支持长度）`;
+    if (auto && !/^(?:0|false|off)$/.test(auto)) notes[`paragraphSpacing.${name}`] = t("Word automatic paragraph spacing (no equivalent Papper setting)");
+    else if (lines !== undefined) notes[`paragraphSpacing.${name}`] = t("{0} lines (Papper only supports lengths)", Number(lines) / 100);
     else paragraphSpacing[name] = units(attribute(spacing, name) ?? "0", 20);
   }
   if (Object.keys(paragraphSpacing).length) values.paragraphSpacing = paragraphSpacing;
@@ -95,7 +96,7 @@ function readValues(properties: Map<string, XmlElement>, theme: XmlElement | und
   if (line === undefined) values.lineSpacing = 1;
   else if (rule === "auto") values.lineSpacing = Number(units(line, 240, ""));
   else if (rule === "exact") values.lineSpacing = units(line, 20);
-  else notes.lineSpacing = `至少 ${units(line, 20)}（Papper 无等价配置）`;
+  else notes.lineSpacing = t("At least {0} (no equivalent Papper setting)", units(line, 20));
   const indent = properties.get("ind");
   const indentation: Record<string, string> = {};
   for (const name of ["left", "right", "firstLine", "hanging"]) {
@@ -103,7 +104,7 @@ function readValues(properties: Map<string, XmlElement>, theme: XmlElement | und
     const length = attribute(indent, name);
     if (chars !== undefined) {
       if (name === "firstLine") values.firstLineIndentChars = Number(chars) / 100;
-      else notes[`indentation.${name}`] = `${Number(chars) / 100} 字符（Papper 此字段仅支持长度）`;
+      else notes[`indentation.${name}`] = t("{0} characters (Papper only supports lengths for this field)", Number(chars) / 100);
     } else if (length !== undefined) indentation[name] = units(length, 20);
     else if (name === "left" || name === "right") indentation[name] = "0pt";
   }

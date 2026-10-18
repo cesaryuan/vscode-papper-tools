@@ -1,3 +1,4 @@
+import { t } from "../localization";
 import { isAlias, isMap, isScalar, isSeq, parseDocument, Scalar, YAMLMap } from "yaml";
 import { getYamlHeader } from "../manuscriptStyle/document";
 import { asArray, asRecord, flattenAstText } from "./ast";
@@ -40,11 +41,11 @@ export function getBuiltMetadataValue(ast: unknown, field: InlayMetadataField): 
 function parseEditableHeader(text: string) {
   const header = getYamlHeader(text);
   const yaml = parseDocument(header?.content ?? "");
-  if (yaml.errors.length) throw new Error(`YAML header 无法解析：${yaml.errors[0].message}`);
+  if (yaml.errors.length) throw new Error(t("Could not parse the YAML header: {0}", yaml.errors[0].message));
   if (!yaml.contents || (isScalar(yaml.contents) && yaml.contents.value === null)) yaml.contents = yaml.createNode({}) as YAMLMap.Parsed;
-  if (!isMap(yaml.contents)) throw new Error("YAML header 顶层必须是对象");
+  if (!isMap(yaml.contents)) throw new Error(t("The YAML header must be an object"));
   // Changing a shared anchor would also change metadata outside this setting.
-  if (yaml.contents.anchor) throw new Error("YAML header 使用了 anchor，请先展开为独立对象");
+  if (yaml.contents.anchor) throw new Error(t("Expand the YAML header anchor into an independent object first"));
   return { header, yaml, root: yaml.contents as YAMLMap };
 }
 
@@ -55,12 +56,12 @@ export function getManuscriptMetadataValue(text: string, field: InlayMetadataFie
   const node: unknown = root.get(field, true);
   // An empty CSL field is a common configuration placeholder and can be filled by the style picker.
   if (field === "csl" && isScalar(node) && node.value === null && !node.anchor) return undefined;
-  if (isAlias(node) || ((isScalar(node) || isSeq(node)) && node.anchor)) throw new Error(`${field} 使用了 YAML anchor 或 alias，请先展开后设置`);
+  if (isAlias(node) || ((isScalar(node) || isSeq(node)) && node.anchor)) throw new Error(t("Expand YAML anchors or aliases in {0} before editing", field));
   if (isSeq(node) && node.items.some((item) => isAlias(item) || (isScalar(item) && item.anchor))) {
-    throw new Error(`${field} 列表使用了 YAML anchor 或 alias，请先展开后设置`);
+    throw new Error(t("Expand YAML anchors or aliases in the {0} list before editing", field));
   }
   const value = isScalar(node) ? node.value : isSeq(node) ? node.items.map((item) => isScalar(item) ? item.value : undefined) : undefined;
-  if (!isInlayMetadataValue(value)) throw new Error(`${field} 必须是文本或非空文本列表`);
+  if (!isInlayMetadataValue(value)) throw new Error(t("{0} must be text or a nonempty list of text", field));
   return value;
 }
 
@@ -74,7 +75,7 @@ export function getManuscriptMetadataRange(text: string, field: InlayMetadataFie
 
 /** Creates one header-only edit at Pandoc's highest-priority manuscript scope, preserving the body verbatim. */
 export function createManuscriptMetadataEdit(text: string, field: InlayMetadataField, value: InlayMetadataValue): MetadataEdit | undefined {
-  if (!isInlayMetadataField(field) || !isInlayMetadataValue(value)) throw new Error("无效的引用或题注设置");
+  if (!isInlayMetadataField(field) || !isInlayMetadataValue(value)) throw new Error(t("Invalid reference or caption settings"));
   const current = getManuscriptMetadataValue(text, field);
   if (JSON.stringify(current) === JSON.stringify(value)) return undefined;
   const { header, yaml, root } = parseEditableHeader(text);

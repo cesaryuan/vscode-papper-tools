@@ -1,3 +1,4 @@
+import { t } from "../localization";
 import { isAlias, isMap, isScalar, isSeq, parseDocument, stringify, type YAMLMap } from "yaml";
 import { getYamlHeader } from "../manuscriptStyle/document";
 import { STYLE_FIELDS, PANDOC_METADATA_FIELDS } from "../styleConfiguration";
@@ -8,10 +9,10 @@ export type SettingsRow = { path: string[]; title: string; description: string; 
 export type SettingsSection = "math" | "tables" | "docx" | "bibliography" | "images" | "layout" | "references" | "general";
 export type SettingsScope = "main" | "reply";
 export const SETTINGS_SECTIONS: Array<{ id: SettingsSection; title: string }> = [
-  { id: "math", title: "公式与 MathType" }, { id: "tables", title: "表格" }, { id: "docx", title: "DOCX 样式" },
-  { id: "bibliography", title: "参考文献样式" }, { id: "images", title: "图片与 SVG" },
-  { id: "layout", title: "页面与行号" }, { id: "references", title: "交叉引用与编号" },
-  { id: "general", title: "其他设置" },
+  { id: "math", title: "Math and MathType" }, { id: "tables", title: "Tables" }, { id: "docx", title: "DOCX Styles" },
+  { id: "bibliography", title: "Citation Styles" }, { id: "images", title: "Images and SVG" },
+  { id: "layout", title: "Page Layout and Line Numbers" }, { id: "references", title: "Cross References and Numbering" },
+  { id: "general", title: "Other Settings" },
 ];
 
 /** Parses only the configuration scope, keeping manuscript body text outside YAML. */
@@ -19,9 +20,9 @@ function configuration(text: string, style: boolean) {
   const header = style ? undefined : getYamlHeader(text);
   const content = style ? text : header?.content ?? "";
   const yaml = parseDocument(content);
-  if (yaml.errors.length) throw new Error(`Papper 配置无法解析：${yaml.errors[0].message}`);
+  if (yaml.errors.length) throw new Error(t("Could not parse the Papper configuration: {0}", yaml.errors[0].message));
   if (!yaml.contents || (isScalar(yaml.contents) && yaml.contents.value === null)) yaml.contents = yaml.createNode({}) as YAMLMap.Parsed;
-  if (!isMap(yaml.contents)) throw new Error("Papper 配置必须是 YAML 对象");
+  if (!isMap(yaml.contents)) throw new Error(t("The Papper configuration must be a YAML object"));
   return { yaml, header, content };
 }
 
@@ -30,14 +31,14 @@ function resolvePath(root: unknown, keys: string[]): { path: string[]; node: unk
   let node = root;
   const path: string[] = [];
   for (const key of keys) {
-    if (isAlias(node) || (isMap(node) && node.anchor)) throw new Error("配置使用了共享 YAML anchor 或 alias，请先展开后设置");
-    if (node !== undefined && !isMap(node)) throw new Error("设置的上级配置必须是对象");
+    if (isAlias(node) || (isMap(node) && node.anchor)) throw new Error(t("Expand shared YAML anchors or aliases in the configuration before editing"));
+    if (node !== undefined && !isMap(node)) throw new Error(t("The parent setting must be an object"));
     const pair = isMap(node) ? node.items.find((item) => isScalar(item.key) &&
       String(item.key.value) === key) : undefined;
     path.push(pair && isScalar(pair.key) ? String(pair.key.value) : key);
     node = pair?.value;
   }
-  if (isAlias(node) || ((isMap(node) || isScalar(node) || isSeq(node)) && node.anchor)) throw new Error("设置使用了共享 YAML anchor 或 alias，请先展开后设置");
+  if (isAlias(node) || ((isMap(node) || isScalar(node) || isSeq(node)) && node.anchor)) throw new Error(t("Expand shared YAML anchors or aliases in this setting before editing"));
   return { path, node };
 }
 
@@ -49,7 +50,7 @@ export function settingsPrefix(style: boolean, scope: SettingsScope, metadata = 
 
 /** Locates schema documentation for an editable field, including arbitrary Word style names. */
 function schemaFor(keys: string[], style: boolean): StyleField | undefined {
-  let fields = style ? STYLE_FIELDS : { papperSettings: { description: "稿件设置", children: STYLE_FIELDS }, ...PANDOC_METADATA_FIELDS };
+  let fields = style ? STYLE_FIELDS : { papperSettings: { description: "Manuscript settings", children: STYLE_FIELDS }, ...PANDOC_METADATA_FIELDS };
   let field: StyleField | undefined;
   for (let index = 0; index < keys.length; index++) {
     field = fields?.[keys[index]];
@@ -141,9 +142,9 @@ export function getSettingsStyleNames(text: string, style: boolean, scope: Setti
 
 /** Creates a validated, comment-preserving configuration edit and keeps manuscript prose byte-for-byte unchanged. */
 export function createSettingsEdit(text: string, style: boolean, keys: string[], input: string, reset = false) {
-  if (!Array.isArray(keys) || keys.some((key) => typeof key !== "string" || !key || key.length > 200)) throw new Error("无效的设置字段");
+  if (!Array.isArray(keys) || keys.some((key) => typeof key !== "string" || !key || key.length > 200)) throw new Error(t("Invalid settings field"));
   const field = schemaFor(keys, style);
-  if (!field || field.dynamicChildren || keys.at(-1) === "reply") throw new Error("不支持的设置字段");
+  if (!field || field.dynamicChildren || keys.at(-1) === "reply") throw new Error(t("Unsupported settings field"));
   const { yaml, header, content } = configuration(text, style);
   const resolved = resolvePath(yaml.contents, keys);
   if (reset) yaml.deleteIn(resolved.path);
@@ -151,12 +152,12 @@ export function createSettingsEdit(text: string, style: boolean, keys: string[],
     let value: unknown = input;
     if (field.children || isMap(resolved.node) || isSeq(resolved.node)) {
       const parsed = parseDocument(input);
-      if (parsed.errors.length) throw new Error(`字段值无法解析：${parsed.errors[0].message}`);
+      if (parsed.errors.length) throw new Error(t("Could not parse the field value: {0}", parsed.errors[0].message));
       value = parsed.toJSON();
-      if (value !== null && typeof value !== "object" && !field.values?.length && !["fontFamily", "font"].includes(keys.at(-1))) throw new Error("此设置需要 YAML 对象");
+      if (value !== null && typeof value !== "object" && !field.values?.length && !["fontFamily", "font"].includes(keys.at(-1))) throw new Error(t("This setting requires a YAML object"));
     } else if (["true", "false", "null"].includes(input)) value = JSON.parse(input);
     else if (/^-?\d+(?:\.\d+)?$/.test(input)) value = Number(input);
-    if (field.values?.length === 2 && field.values.includes("true") && field.values.includes("false") && typeof value !== "boolean") throw new Error("此设置需要开启或关闭");
+    if (field.values?.length === 2 && field.values.includes("true") && field.values.includes("false") && typeof value !== "boolean") throw new Error(t("This setting requires a boolean value"));
     const replacement = yaml.createNode(value);
     if (isScalar(resolved.node) || isMap(resolved.node) || isSeq(resolved.node)) {
       replacement.comment = resolved.node.comment;

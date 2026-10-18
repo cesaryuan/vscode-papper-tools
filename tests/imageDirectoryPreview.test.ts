@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
+import { t } from "../src/localization";
 import { isDirectoryPreviewImageFile } from "../src/imageDirectoryPreview/imageTypes";
 import { initializeDirectoryPreviewWebview, type DirectoryPreviewWebview } from "../src/imageDirectoryPreview/webviewInitialization";
 import { buildDirectoryPreviewWebviewSecurityMarkup } from "../src/imageDirectoryPreview/webviewSecurity";
@@ -238,8 +240,19 @@ function keepsScrollTriggeredScanStatusTextStable(): void {
   const controllerSource = readFileSync("src/imageDirectoryPreview/webview.ts", "utf8");
   const updateStatusSource = controllerSource.match(/function updateStatus\(\): void \{([\s\S]*?)\n  \}/)?.[1] || "";
 
-  assert.doesNotMatch(updateStatusSource, /if \(state\.loading\)/);
-  assert.match(updateStatusSource, /if \(state\.hasMore\) \{\s*status\.textContent = `\$\{state\.items\.length\} found · scroll to discover more`;/);
+  assert.ok(updateStatusSource, "The directory preview status handler must be present");
+  const state = { items: [{}, {}], hasMore: true, skippedDirectories: 0, loading: false };
+  const status = { textContent: "" };
+  const context = { state, status, continueScan: { hidden: false, disabled: false }, t };
+  runInNewContext(updateStatusSource, context);
+  const idleText = status.textContent;
+  assert.ok(idleText.includes("2"));
+  state.loading = true;
+  runInNewContext(updateStatusSource, context);
+  assert.equal(status.textContent, idleText);
+  state.hasMore = false;
+  runInNewContext(updateStatusSource, context);
+  assert.notEqual(status.textContent, idleText);
 }
 
 /** Reproduces an opening tree whose first bounded directory batches contain no images. */

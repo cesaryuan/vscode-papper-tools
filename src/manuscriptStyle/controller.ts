@@ -1,3 +1,4 @@
+import { t } from "../localization";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
@@ -28,7 +29,7 @@ export class ReferenceStyleCache {
     const project = await findPandocManuscriptProject(document.uri);
     const root = project.rootUri.fsPath;
     const executable = await findExistingPapperExecutable();
-    if (!executable) throw new Error("未找到 Papper，请先执行 Papper Tools: Install or Update Papper");
+    if (!executable) throw new Error(t("Papper was not found. Run Papper Tools: Install or Update Papper first"));
     const styles = process.env.PMT_STYLE_FILE ? [path.resolve(root, process.env.PMT_STYLE_FILE)]
       : [...new Set([path.join(path.dirname(document.uri.fsPath), "style.yml"), path.join(root, "style.yml")])];
     const reference = process.env.PMT_REFERENCE_DOC ? path.resolve(root, process.env.PMT_REFERENCE_DOC) : undefined;
@@ -99,12 +100,12 @@ export class ReferenceStyleCache {
         await runProcess(inputs.executable, args, { cwd: inputs.root, env: environment.env, output: this.output });
       } catch (error) {
         if (/unexpected argument.*export-reference-doc|unrecognized.*export-reference-doc/i.test(String(error))) {
-          throw new Error("当前 Papper 不支持 --export-reference-doc，请执行 Papper Tools: Install or Update Papper 后重试");
+          throw new Error(t("This Papper version does not support --export-reference-doc. Run Papper Tools: Install or Update Papper and try again"));
         }
         throw error;
       }
       const styles = readReferenceStyles(await fs.readFile(exported));
-      if (!styles.length) throw new Error("导出的 reference DOCX 中没有段落或字符样式");
+      if (!styles.length) throw new Error(t("The exported reference DOCX contains no paragraph or character styles"));
       try {
         await fs.mkdir(this.storage, { recursive: true });
         const temporaryCache = `${cachePath}.${randomUUID()}.tmp`;
@@ -169,7 +170,7 @@ export class ManuscriptStyleController implements vscode.HoverProvider {
       if (index) markdown.appendMarkdown(" | ");
       // Translate built-in labels only; keep Word style names in command arguments and custom labels intact.
       const displayName = target.custom ? target.name : target.name.replace(/^标题\s*(\d)$/, "Heading $1").replace(/^正文文本$/, "Body Text");
-      markdown.appendMarkdown(`[Set ${escapeMarkdownText(displayName)} Style](command:${SET_MANUSCRIPT_STYLE_COMMAND}?${args})`);
+      markdown.appendMarkdown(`[${escapeMarkdownText(t("Set {0} Style", displayName))}](command:${SET_MANUSCRIPT_STYLE_COMMAND}?${args})`);
     }
     // Restrict the hover to the intersection so an inline action disappears when the mouse leaves its span.
     const startLine = Math.max(...unique.map((entry) => entry.line));
@@ -182,21 +183,21 @@ export class ManuscriptStyleController implements vscode.HoverProvider {
   /** Inserts the clicked element's effective defaults in a single undoable frontmatter edit. */
   async setStyle(uriText: unknown, requested: unknown, type: unknown = "paragraph"): Promise<void> {
     try {
-      if (typeof uriText !== "string" || typeof requested !== "string" || requested.length > 200) throw new Error("无效的样式设置请求");
-      if (type !== "paragraph" && type !== "character") throw new Error("无效的样式类型");
+      if (typeof uriText !== "string" || typeof requested !== "string" || requested.length > 200) throw new Error(t("Invalid style settings request"));
+      if (type !== "paragraph" && type !== "character") throw new Error(t("Invalid style type"));
       const uri = vscode.Uri.parse(uriText);
-      if (uri.scheme !== "file") throw new Error("样式设置仅支持本地 Markdown 文档");
+      if (uri.scheme !== "file") throw new Error(t("Style settings require a local Markdown document"));
       const document = await vscode.workspace.openTextDocument(uri);
-      if (!["markdown", "mdx"].includes(document.languageId)) throw new Error("请在 Markdown 文档中设置样式");
+      if (!["markdown", "mdx"].includes(document.languageId)) throw new Error(t("Open a Markdown document to configure styles"));
       const originalHeader = getYamlHeader(document.getText())?.content;
-      const styles = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `正在读取 ${requested} 的实际样式` },
+      const styles = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t("Reading the effective style for {0}", requested) },
         /** Retries export failures only after the user explicitly clicks the style action. */
         () => this.cache.get(document, true));
-      if (originalHeader !== getYamlHeader(document.getText())?.content) throw new Error("读取期间 YAML header 已改变，请重新点击样式按钮");
+      if (originalHeader !== getYamlHeader(document.getText())?.content) throw new Error(t("The YAML header changed while reading styles. Click the style button again"));
       // Missing custom styles use effective body defaults; character actions filter out paragraph-only properties below.
       const style = findReferenceStyle(styles, requested, type)
         ?? findReferenceStyle(styles, "正文文本") ?? findReferenceStyle(styles, "正文");
-      if (!style) throw new Error("当前 reference DOCX 缺少正文默认样式，无法读取继承配置");
+      if (!style) throw new Error(t("The reference DOCX has no default body style. Could not read inherited settings"));
       // A preview can own focus while a source hover is clicked; reuse the source group instead of opening a duplicate there.
       const sourceEditor = vscode.window.visibleTextEditors.find((candidate) => candidate.document.uri.toString() === document.uri.toString());
       const editor = await vscode.window.showTextDocument(document, {
@@ -204,7 +205,7 @@ export class ManuscriptStyleController implements vscode.HoverProvider {
         preserveFocus: false,
         preview: false,
       });
-      if (originalHeader !== getYamlHeader(document.getText())?.content) throw new Error("读取期间 YAML header 已改变，请重新点击样式按钮");
+      if (originalHeader !== getYamlHeader(document.getText())?.content) throw new Error(t("The YAML header changed while reading styles. Click the style button again"));
       const before = document.getText();
       const result = addManuscriptStyle(before, requested, style.values, type);
       const updatedHeader = getYamlHeader(result.text);
@@ -218,7 +219,7 @@ export class ManuscriptStyleController implements vscode.HoverProvider {
         const applied = await editor.edit(
           /** Adds only the frontmatter as one Undo operation. */
           (edit) => edit.replace(range, replacement), { undoStopBefore: true, undoStopAfter: true });
-        if (!applied) throw new Error("VS Code 拒绝了 YAML header 编辑");
+        if (!applied) throw new Error(t("VS Code rejected the YAML header edit"));
         this.output.appendLine(`[Styles] Added missing ${result.styleName} settings: ${document.uri.fsPath}`);
       }
       const source = document.getText();
@@ -227,7 +228,7 @@ export class ManuscriptStyleController implements vscode.HoverProvider {
       editor.revealRange(editor.selection, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
     } catch (error) {
       this.output.appendLine(`[Styles] Could not set manuscript style: ${String(error)}`);
-      void vscode.window.showErrorMessage(`设置样式失败：${error instanceof Error ? error.message : String(error)}`);
+      void vscode.window.showErrorMessage(t("Could not configure the style: {0}", error instanceof Error ? error.message : String(error)));
     }
   }
 }

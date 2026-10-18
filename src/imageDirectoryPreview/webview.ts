@@ -1,3 +1,4 @@
+import { configureLocalization, t } from "../localization";
 /*
  * Browser-side controller for the directory image-preview Webview.
  *
@@ -505,7 +506,7 @@ function startDirectoryPreview(): void {
     toggle.className = "folder-toggle";
     toggle.dataset.folder = folder.path;
     toggle.setAttribute("aria-expanded", String(!collapsed));
-    toggle.setAttribute("aria-label", folder.path ? `Folder ${folder.path}` : "Top-level images");
+    toggle.setAttribute("aria-label", folder.path ? t("Folder {0}", folder.path) : t("Top-level images"));
     toggle.title = `${collapsed ? "Expand" : "Collapse"} ${folder.path || folder.name}`;
     const disclosure = document.createElement("span");
     disclosure.className = "folder-disclosure";
@@ -707,21 +708,21 @@ function startDirectoryPreview(): void {
   function copyImageToClipboard(resourceUri: string): void {
     const image = state.items.find((item) => item.resourceUri === resourceUri);
     if (!image) {
-      showNotice("Could not find the image to copy.");
+      showNotice(t("Could not find the image to copy."));
       return;
     }
     if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
-      showNotice("Image clipboard access is unavailable in this VS Code window.");
+      showNotice(t("Image clipboard access is unavailable in this VS Code window."));
       return;
     }
 
     // ClipboardItem accepts a promise, which lets the clipboard request start during the click gesture.
     const clipboardItem = new ClipboardItem({ "image/png": createClipboardPngBlob(image) });
     void navigator.clipboard.write([clipboardItem])
-      .then(() => showNotice(`Copied image ${image.name}`))
+      .then(() => showNotice(t("Copied image {0}", image.name)))
       .catch((error) => {
         console.warn("[Image Directory Preview] Could not copy image", error);
-        showNotice("Could not copy image. Allow clipboard access and try again.");
+        showNotice(t("Could not copy image. Allow clipboard access and try again."));
       });
   }
 
@@ -729,7 +730,7 @@ function startDirectoryPreview(): void {
   async function createClipboardPngBlob(image: DirectoryImage): Promise<Blob> {
     const response = await fetch(image.src);
     if (!response.ok) {
-      throw new Error(`Could not read image resource (${response.status}).`);
+      throw new Error(t("Could not read image resource ({0}).", response.status));
     }
     const sourceBlob = await response.blob();
     const sourceUrl = URL.createObjectURL(sourceBlob);
@@ -746,7 +747,7 @@ function startDirectoryPreview(): void {
     return new Promise((resolve, reject) => {
       const image = new Image();
       image.addEventListener("load", () => resolve(image), { once: true });
-      image.addEventListener("error", () => reject(new Error("The image could not be decoded.")), { once: true });
+      image.addEventListener("error", () => reject(new Error(t("The image could not be decoded."))), { once: true });
       image.src = sourceUrl;
     });
   }
@@ -758,7 +759,7 @@ function startDirectoryPreview(): void {
     canvas.height = image.naturalHeight;
     const context = canvas.getContext("2d");
     if (!context || !canvas.width || !canvas.height) {
-      return Promise.reject(new Error("The image has no drawable dimensions."));
+      return Promise.reject(new Error(t("The image has no drawable dimensions.")));
     }
     context.drawImage(image, 0, 0);
     return new Promise((resolve, reject) => {
@@ -766,7 +767,7 @@ function startDirectoryPreview(): void {
         if (blob) {
           resolve(blob);
         } else {
-          reject(new Error("The image could not be encoded as PNG."));
+          reject(new Error(t("The image could not be encoded as PNG.")));
         }
       }, "image/png");
     });
@@ -827,11 +828,11 @@ function startDirectoryPreview(): void {
   function updateStatus(): void {
     // Keep one status label while scan work remains so a user-triggered batch does not flicker the toolbar.
     if (state.hasMore) {
-      status.textContent = `${state.items.length} found · scroll to discover more`;
+      status.textContent = t("{0} found · scroll to discover more", state.items.length);
     } else if (state.skippedDirectories) {
-      status.textContent = `${state.items.length} images · ${state.skippedDirectories} folders unavailable`;
+      status.textContent = t("{0} images · {1} folders unavailable", state.items.length, state.skippedDirectories);
     } else {
-      status.textContent = `${state.items.length} images`;
+      status.textContent = t("{0} images", state.items.length);
     }
     // Scrolling, not an always-running background loop, unlocks the next bounded batch.
     continueScan.hidden = true;
@@ -1038,7 +1039,7 @@ function startDirectoryPreview(): void {
       rebuildVirtualRows();
       renderVirtualGallery(true);
       updateStatus();
-      showNotice("Image moved to the Recycle Bin");
+      showNotice(t("Image moved to the Recycle Bin"));
       if (anchor && anchor.resourceUri !== message.resourceUri) {
         requestAnimationFrame(() => restoreVisualAnchor(anchor));
       }
@@ -1061,14 +1062,17 @@ function startDirectoryPreview(): void {
       requestNextPage();
     }
     if (!state.hasMore && !state.items.length) {
-      gallery.innerHTML = '<p class="empty">No supported image files were found in this directory.</p>';
+      const empty = document.createElement("p");
+      empty.className = "empty";
+      empty.textContent = t("No supported image files were found in this directory.");
+      gallery.replaceChildren(empty);
     }
   });
 
   applyPreferences();
   rebuildVirtualRows();
   renderVirtualGallery();
-  status.textContent = "Connecting to directory scanner…";
+  status.textContent = t("Connecting to directory scanner…");
   vscode.postMessage({ type: "ready" });
 }
 
@@ -1082,11 +1086,13 @@ function getRequiredElement<ElementType extends HTMLElement>(id: string): Elemen
 }
 
 try {
+  const localization = JSON.parse(document.getElementById("preview-localization")?.textContent ?? "{}");
+  configureLocalization(localization.messages, localization.language);
   startDirectoryPreview();
 } catch (error) {
   const status = document.getElementById("status");
   if (status) {
-    status.textContent = "Directory preview startup failed. See Webview Developer Tools.";
+    status.textContent = t("Directory preview startup failed. See Webview Developer Tools.");
   }
   console.error("Directory image preview startup failed", error);
 }

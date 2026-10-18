@@ -1,3 +1,4 @@
+import { t } from "../localization";
 import { isAlias, isMap, isScalar, Pair, parseDocument, YAMLMap } from "yaml";
 import { parsePandocSyntax } from "../parser";
 import { MarkdownSyntax, getAttributeValue, maskSourceRanges } from "../markdownSyntax";
@@ -17,7 +18,7 @@ export function getYamlHeader(text: string, allowIncomplete = false): YamlHeader
   if (!match) {
     // Completion must work before a closing delimiter is typed; edit commands still require it.
     if (allowIncomplete) return { start: opening[0].length, end: text.length, content: text.slice(opening[0].length), bodyStart: text.length };
-    throw new Error("YAML header 缺少结束分隔符 --- 或 ...");
+    throw new Error(t("The YAML header is missing its closing --- or ... delimiter"));
   }
   return { start: opening[0].length, end: match.index, content: text.slice(opening[0].length, match.index), bodyStart: match.index + match[0].length };
 }
@@ -117,19 +118,19 @@ function sameStyle(left: string, right: string): boolean {
 export function addManuscriptStyle(text: string, name: string, defaults: DocxStyleValues, type: DocxStyleType = "paragraph"): { text: string; styleName: string } {
   const header = getYamlHeader(text);
   const yaml = parseDocument(header?.content ?? "");
-  if (yaml.errors.length) throw new Error(`YAML header 无法解析：${yaml.errors[0].message}`);
+  if (yaml.errors.length) throw new Error(t("Could not parse the YAML header: {0}", yaml.errors[0].message));
   if (!yaml.contents || (isScalar(yaml.contents) && yaml.contents.value === null)) yaml.contents = yaml.createNode({}) as YAMLMap.Parsed;
-  if (!isMap(yaml.contents)) throw new Error("YAML header 顶层必须是对象");
+  if (!isMap(yaml.contents)) throw new Error(t("The YAML header must be an object"));
   let changed = false;
   /** Obtains an editable map while rejecting aliases and incompatible existing scalar values. */
   const ensureMap = (parent: YAMLMap, requested: string): YAMLMap => {
     const pair = parent.items.find((entry) => isScalar(entry.key) && String(entry.key.value) === requested);
     if (pair && isMap(pair.value)) {
       // Editing an anchored map would also change other metadata referencing that anchor.
-      if (pair.value.anchor) throw new Error(`${requested} 使用了 YAML anchor，请先展开为独立对象再设置样式`);
+      if (pair.value.anchor) throw new Error(t("Expand the YAML anchor in {0} into an independent object before configuring styles", requested));
       return pair.value;
     }
-    if (pair && (isAlias(pair.value) || !isScalar(pair.value) || pair.value.value !== null)) throw new Error(`${requested} 必须是可编辑的 YAML 对象`);
+    if (pair && (isAlias(pair.value) || !isScalar(pair.value) || pair.value.value !== null)) throw new Error(t("{0} must be an editable YAML object", requested));
     const map = yaml.createNode({}) as YAMLMap;
     if (pair) pair.value = map;
     else parent.set(requested, map);
@@ -152,7 +153,7 @@ export function addManuscriptStyle(text: string, name: string, defaults: DocxSty
       if (has(target, key)) {
         const pair = target.items.find((entry) => isScalar(entry.key) && String(entry.key.value) === key);
         if (isMap(pair.value) && value && typeof value === "object") {
-          if (pair.value.anchor) throw new Error(`${key} 使用了 YAML anchor，请先展开为独立对象再设置样式`);
+          if (pair.value.anchor) throw new Error(t("Expand the YAML anchor in {0} into an independent object before configuring styles", key));
           fill(pair.value, value as Record<string, unknown>, root, field?.children ?? {});
         }
         continue;

@@ -66,7 +66,7 @@ test("community styles remain searchable and downloadable when official loading 
   });
   const styles = await repository.getStyles();
   assert.equal(styles.length, 1);
-  assert.match(repository.indexWarnings.join(" "), /Zotero 官方/);
+  assert.match(repository.indexWarnings.join(" "), /Zotero official/);
   const fixture = new SourceModuleFixture({ vscode: {} });
   const { searchZoteroStyles } = fixture.load<typeof import("../src/inlayHints/csl/picker")>("src/inlayHints/csl/picker.ts");
   assert.equal(searchZoteroStyles(styles, "学位论文 双语 GB/T")[0], styles[0]);
@@ -104,7 +104,7 @@ test("community downloads resolve official parents with locale preserved and rej
   const xml = await repository.downloadStyle(style);
   assert.match(xml, /default-locale="zh-CN"/);
   assert.doesNotMatch(xml, /independent-parent/);
-  await assert.rejects(new ZoteroStyleRepository(async () => csl("https://example.org/styles/parent")).downloadStyle(style), /母样式链接/);
+  await assert.rejects(new ZoteroStyleRepository(async () => csl("https://example.org/styles/parent")).downloadStyle(style), /parent style URL/);
 });
 
 test("dependent journal downloads produce usable local CSL without another online dependency and preserve locale", async () => {
@@ -338,7 +338,7 @@ test("selected journal downloads into its own workspace, sets a build-relative C
     document.uri.fsPath = path.join(projectRoot, "style.yml");
     const original = getCslConfigurationContent(document as any);
     text = "pandocMetadata:\n  csl: concurrent.csl\n";
-    await assert.rejects(controller.applyStyle(document as any, ["pandocMetadata", "csl"], { name: "journal", title: "Journal" }, original), /配置已改变/);
+    await assert.rejects(controller.applyStyle(document as any, ["pandocMetadata", "csl"], { name: "journal", title: "Journal" }, original), /configuration changed/);
     assert.equal(parse(text).pandocMetadata.csl, "concurrent.csl");
   } finally { await rm(root, { recursive: true, force: true }); }
 });

@@ -1,3 +1,4 @@
+import { t, htmlMessage, getLanguage, getWebviewLocalizationScript } from "../../localization";
 import { randomBytes } from "node:crypto";
 
 export type PickerShell = { styles: string; before: string; after: string; script: string };
@@ -5,10 +6,10 @@ export type PickerShell = { styles: string; before: string; after: string; scrip
 /** Builds the CSL search page; the extension supplies results and safe previews through the webview message bridge. */
 export function buildCslPickerHtml(shell?: PickerShell): string {
   const nonce = randomBytes(18).toString("base64");
-  return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">
+  return `<!DOCTYPE html><html lang="${htmlMessage(getLanguage())}"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
-<title>${shell ? "Papper 设置" : "设置参考文献样式"}</title>
+<title>${htmlMessage(shell ? "Papper Tools Settings" : "Set Citation Style")}</title>
 <style>
 * { box-sizing: border-box; } body { margin:0; color:var(--vscode-foreground); background:var(--vscode-editor-background); font:var(--vscode-font-size,13px) var(--vscode-font-family,sans-serif); }
 .page { display:flex; flex-direction:column; height:100vh; padding:24px; gap:18px; }
@@ -35,14 +36,15 @@ button:hover { background:var(--vscode-button-hoverBackground); } button:focus-v
 @media(max-width:650px) { .page { padding:14px; } .content { grid-template-columns:1fr; grid-template-rows:minmax(140px,38%) minmax(0,1fr); gap:14px; } .preview { padding:14px; } footer { align-items:flex-start; } }
 ${shell?.styles ?? ""}
 </style></head><body>${shell?.before ?? ""}<main class="page" id="bibliography">
-<header><h1>设置参考文献样式</h1><p class="muted">搜索期刊、学校或样式名称 · Zotero 官方与中文社区样式库</p></header>
+<header><h1>${htmlMessage("Set Citation Style")}</h1><p class="muted">${htmlMessage("Search journals, institutions or style names · Zotero official and Chinese community libraries")}</p></header>
 <div id="csl-config"></div>
-<div class="toolbar"><input id="search" type="search" aria-label="搜索期刊、学校或样式名称" placeholder="例如 Nature、GB/T 7714、北京大学" autocomplete="off"><button id="cancel" class="secondary">${shell ? "清空搜索" : "取消"}</button></div>
+<div class="toolbar"><input id="search" type="search" aria-label="${htmlMessage("Search journals, institutions or style names")}" placeholder="${htmlMessage("For example Nature, GB/T 7714, Peking University")}" autocomplete="off"><button id="cancel" class="secondary">${htmlMessage(shell ? "Clear Search" : "Cancel")}</button></div>
 <div id="sources-warning" class="sources-warning" role="status"></div>
-<div class="content"><div class="results"><div id="count" class="muted" role="status">正在加载参考文献样式库…</div><div id="list" role="listbox" aria-label="参考文献样式"></div></div>
-<article class="preview" aria-label="样式预览"><h2 id="style-title">样式预览</h2><p id="style-format" class="muted"></p><div id="sample" aria-live="polite"><p class="notice">点击样式名称，或使用方向键查看 Citations 和 Bibliography</p></div></article></div>
-<footer><span class="muted">样式库示例文献 · 确认后下载并更新参考文献样式配置</span><button id="apply" disabled>使用此样式</button></footer>
+<div class="content"><div class="results"><div id="count" class="muted" role="status">${htmlMessage("Loading citation style libraries…")}</div><div id="list" role="listbox" aria-label="${htmlMessage("Citation Styles")}"></div></div>
+<article class="preview" aria-label="${htmlMessage("Style Preview")}"><h2 id="style-title">${htmlMessage("Style Preview")}</h2><p id="style-format" class="muted"></p><div id="sample" aria-live="polite"><p class="notice">${htmlMessage("Select a style or use the arrow keys to preview citations and bibliography")}</p></div></article></div>
+<footer><span class="muted">${htmlMessage("Library sample references · Apply to download the style and update the citation configuration")}</span><button id="apply" disabled>${htmlMessage("Use This Style")}</button></footer>
 </main>${shell?.after ?? ""}<script nonce="${nonce}">
+${getWebviewLocalizationScript()}
 const vscode = acquireVsCodeApi();
 const search = document.getElementById('search');
 const list = document.getElementById('list');
@@ -65,14 +67,14 @@ function activate(style, scroll = false) {
   format.textContent = style.description;
   apply.disabled = false;
   for (const row of list.children) { const selected = row.dataset.name === style.name; row.setAttribute('aria-selected', String(selected)); if (selected && scroll) row.scrollIntoView({block:'nearest'}); }
-  notice('正在加载预览…');
+  notice(t("Loading preview…"));
   vscode.postMessage({type:'preview', name:style.name});
 }
 /** Sends an explicit confirmation only for the currently previewed journal. */
 function accept() { if (active) vscode.postMessage({type:'select', name:active.name}); }
 /** Requests results with a revision so late messages cannot replace a newer search. */
 function requestSearch() { revision++; vscode.postMessage({type:'search', query:search.value, revision}); }
-search.addEventListener('input', () => { clearTimeout(searchTimer); active = undefined; results = []; apply.disabled = true; count.textContent = '正在搜索…'; list.replaceChildren(); notice('搜索后选择期刊查看预览'); revision++; searchTimer = setTimeout(requestSearch, 120); });
+search.addEventListener('input', () => { clearTimeout(searchTimer); active = undefined; results = []; apply.disabled = true; count.textContent = t("Searching…"); list.replaceChildren(); notice(t("Select a journal after searching to see a preview")); revision++; searchTimer = setTimeout(requestSearch, 120); });
 document.addEventListener('keydown', (event) => {
   if (document.getElementById('bibliography').hidden) return;
   if (!document.getElementById('search').contains(event.target) && !list.contains(event.target) && event.target !== apply && event.target !== document.getElementById('cancel')) return;
@@ -90,15 +92,15 @@ window.addEventListener('message', (event) => {
   const message = event.data;
   if (message.type === 'results' && message.revision === revision) {
     results = message.styles;
-    count.textContent = message.count ? message.count.toLocaleString() + ' 个样式' + (message.count > results.length ? '（显示前 ' + results.length + ' 个，请缩小搜索范围）' : '') : '没有匹配的样式，请尝试期刊全名或其他关键词';
+    count.textContent = message.count ? t("{0} styles", message.count.toLocaleString(localization.language)) + (message.count > results.length ? t(" (showing the first {0}; narrow your search)", results.length) : '') : t("No matching styles. Try the full journal name or other keywords");
     const nodes = results.map(style => { const row = document.createElement('button'); row.className = 'item'; row.dataset.name = style.name; row.setAttribute('role','option'); row.setAttribute('aria-selected','false'); const name = document.createElement('span'); name.className = 'name'; name.textContent = style.title; const description = document.createElement('span'); description.className = 'format'; description.textContent = style.description; row.append(name, description); row.addEventListener('click', () => activate(style)); return row; });
     list.replaceChildren(...nodes);
     if (results.length) activate(results[0]);
   } else if (message.type === 'preview' && message.name === active?.name) { sample.innerHTML = message.html; }
-  else if (message.type === 'previewError' && message.name === active?.name) { notice(message.error + '。仍可使用此样式，或切换其他样式'); }
+  else if (message.type === 'previewError' && message.name === active?.name) { notice(message.error + t(". You can still use this style or select another")); }
   else if (message.type === 'ready') { requestSearch(); }
-  else if (message.type === 'indexError') { count.textContent = message.error + '，修改搜索词以重试'; }
-  else if (message.type === 'styleSourcesWarning') { document.getElementById('sources-warning').textContent = message.warnings.join('；') + (message.warnings.length ? '。可继续使用已加载样式，修改搜索词以重试' : ''); }
+  else if (message.type === 'indexError') { count.textContent = message.error + t(". Change the search query to retry"); }
+  else if (message.type === 'styleSourcesWarning') { document.getElementById('sources-warning').textContent = message.warnings.join('; ') + (message.warnings.length ? t(". Loaded styles remain available. Change the search query to retry") : ''); }
   else if (message.type === 'cslBusy') { apply.disabled = message.busy || !active; }
 });
 ${shell ? shell.script : "search.focus(); vscode.postMessage({type:'ready'});"}

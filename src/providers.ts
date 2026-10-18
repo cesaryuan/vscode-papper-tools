@@ -1,3 +1,4 @@
+import { t } from "./localization";
 import * as vscode from "vscode";
 import { EXTENSION_NAME } from "./constants";
 import { getConfiguration } from "./configuration";
@@ -577,7 +578,7 @@ export class PandocCompletionProvider {
       .map((entry) => {
         const item = new vscode.CompletionItem(entry.label, vscode.CompletionItemKind.Reference);
         item.insertText = entry.label;
-        item.detail = entry.kind;
+        item.detail = t(entry.kind);
         item.documentation = entry.preview;
         item.range = replacementRange;
         return item;
@@ -597,16 +598,16 @@ function buildLabelHover(entry: import("./parser").LabelEntry | import("./parser
   const definitions = index.getDefinitions(document, entry.label);
   const references = index.getReferences(document, entry.label);
   const markdown = new vscode.MarkdownString(undefined, true);
-  markdown.appendMarkdown(`**${entry.kind}** \`${entry.label}\`\n\n`);
-  markdown.appendMarkdown(`Definitions: **${definitions.length}**  \n`);
-  markdown.appendMarkdown(`References: **${references.length}**`);
+  markdown.appendMarkdown(`**${t(entry.kind)}** \`${entry.label}\`\n\n`);
+  markdown.appendMarkdown(t("Definitions: **{0}**  \n", definitions.length));
+  markdown.appendMarkdown(t("References: **{0}**", references.length));
 
   if (definitions.length === 0) {
-    markdown.appendMarkdown("\n\n$(warning) No definition found for this Pandoc cross reference.");
+    markdown.appendMarkdown(t("\n\n$(warning) No definition found for this Pandoc cross reference."));
   } else if (definitions.length > 1) {
-    markdown.appendMarkdown("\n\n$(warning) Duplicate definitions were found for this label.");
+    markdown.appendMarkdown(t("\n\n$(warning) Duplicate definitions were found for this label."));
   } else if (!isDefinitionHover(tokenType)) {
-    markdown.appendMarkdown(`\n\nDefined at \`${definitions[0].preview}\``);
+    markdown.appendMarkdown(t("\n\nDefined at `{0}`", definitions[0].preview));
   }
 
   return markdown;
@@ -653,18 +654,18 @@ function getMathPreviewForegroundColor() {
  */
 async function buildMathHover(mathBlock: import("./parser").MathBlockEntry, index: PandocWorkspaceIndex, document: vscode.TextDocument, mathRenderer: MathJaxRenderer) {
   const markdown = new vscode.MarkdownString(undefined, true);
-  const label = mathBlock.label || "unlabeled equation";
+  const label = mathBlock.label || t("unlabeled equation");
   const referenceCount = mathBlock.label ? index.getReferences(document, mathBlock.label).length : 0;
 
-  markdown.appendMarkdown(`**Equation** \`${label}\``);
+  markdown.appendMarkdown(t("**Equation** `{0}`", label));
   if (mathBlock.label) {
-    markdown.appendMarkdown(`  \nReferences: **${referenceCount}**`);
+    markdown.appendMarkdown(t("  \nReferences: **{0}**", referenceCount));
   }
 
   if (mathBlock.tex) {
     const renderedSvg = await mathRenderer.renderToDataUri(mathBlock.tex, true, getMathPreviewForegroundColor());
     if (renderedSvg) {
-      markdown.appendMarkdown(`\n\n![Rendered equation preview](${renderedSvg})\n\n`);
+      markdown.appendMarkdown(t("\n\n![Rendered equation preview]({0})\n\n", renderedSvg));
     } else {
       appendMathJaxUnavailableMessage(markdown);
       // Only show raw TeX when rendering fails; successful previews should not
@@ -684,11 +685,11 @@ async function buildMathHover(mathBlock: import("./parser").MathBlockEntry, inde
  */
 async function buildInlineMathHover(inlineMath: import("./parser").InlineMathEntry, mathRenderer: MathJaxRenderer) {
   const markdown = new vscode.MarkdownString(undefined, true);
-  markdown.appendMarkdown("**Inline math**");
+  markdown.appendMarkdown(t("**Inline math**"));
 
   const renderedSvg = await mathRenderer.renderToDataUri(inlineMath.tex, false, getMathPreviewForegroundColor());
   if (renderedSvg) {
-    markdown.appendMarkdown(`\n\n![Rendered inline equation preview](${renderedSvg})\n\n`);
+    markdown.appendMarkdown(t("\n\n![Rendered inline equation preview]({0})\n\n", renderedSvg));
   } else {
     appendMathJaxUnavailableMessage(markdown);
     // Keep failed inline hovers diagnosable without showing source below a
@@ -730,10 +731,10 @@ async function buildParagraphHover(
   const translation: RenderedTranslation | undefined = diffTranslation || await buildParagraphTranslation(paragraph, mathRenderer, paragraphTranslator);
   if (translation && translation.markdown) {
     const diffSideLabel = translation.diffSide === "original"
-      ? " · before"
-      : translation.diffSide === "modified" ? " · after" : "";
+      ? t(" · before")
+      : translation.diffSide === "modified" ? t(" · after") : "";
     markdown.supportHtml = translation.diffSide !== undefined;
-    markdown.appendMarkdown(`**Chinese translation** (${formatTranslationEngineName(translation.engine)}${diffSideLabel})\n\n`);
+    markdown.appendMarkdown(t("**Chinese translation** ({0}{1})\n\n", formatTranslationEngineName(translation.engine), diffSideLabel));
     markdown.appendMarkdown(translation.markdown);
     hasContent = true;
   }
@@ -742,7 +743,7 @@ async function buildParagraphHover(
     if (hasContent) {
       markdown.appendMarkdown("\n\n---\n\n");
     }
-    markdown.appendMarkdown("**Paragraph math preview**\n\n");
+    markdown.appendMarkdown(t("**Paragraph math preview**\n\n"));
     markdown.appendMarkdown(await renderInlineMathParagraphMarkdown(paragraph, mathRenderer));
     hasContent = true;
   }
@@ -1557,7 +1558,7 @@ async function renderInlineMathTextMarkdown(
     parts.push(formatHoverTextChunk(text.slice(cursor, formulaStart), escapeHtml));
     const renderedSvg = await mathRenderer.renderToDataUri(inlineMathEntry.tex, false, getMathPreviewForegroundColor());
     if (renderedSvg) {
-      parts.push(`![Rendered inline equation preview](${renderedSvg})`);
+      parts.push(t("![Rendered inline equation preview]({0})", renderedSvg));
     } else {
       parts.push(`\`${escapeMarkdownCodeSpan(inlineMathEntry.tex)}\``);
     }
@@ -1607,7 +1608,7 @@ function escapeMarkdownCodeSpan(value: string) {
  * @param markdown Hover markdown being built.
  */
 function appendMathJaxUnavailableMessage(markdown: vscode.MarkdownString) {
-  markdown.appendMarkdown("\n\n$(warning) MathJax preview could not render. See the Papper Tools output for the TeX source and error details.\n\n");
+  markdown.appendMarkdown(t("\n\n$(warning) MathJax preview could not render. See the Papper Tools output for the TeX source and error details.\n\n"));
 }
 
 
@@ -1689,7 +1690,7 @@ function addLabelSymbols(labels: import("./parser").LabelEntry[], headingSymbols
 function createLabelSymbol(label: import("./parser").LabelEntry) {
   return new vscode.DocumentSymbol(
     label.label,
-    label.kind,
+    t(label.kind),
     toSymbolKind(label.prefix),
     toRange(label.fullRange),
     toRange(label.range),
@@ -1799,7 +1800,7 @@ export function updateDiagnostics(document: vscode.TextDocument, index: PandocWo
     if (index.getDefinitions(document, reference.label).length === 0) {
       const diagnostic = new vscode.Diagnostic(
         toRange(reference.fullRange),
-        `Undefined Pandoc cross reference: ${reference.label}`,
+        t("Undefined Pandoc cross reference: {0}", reference.label),
         vscode.DiagnosticSeverity.Warning,
       );
       diagnostic.source = EXTENSION_NAME;
@@ -1812,7 +1813,7 @@ export function updateDiagnostics(document: vscode.TextDocument, index: PandocWo
     if (definitions.length > 1) {
       const diagnostic = new vscode.Diagnostic(
         toRange(label.fullRange),
-        `Duplicate Pandoc label: ${label.label}`,
+        t("Duplicate Pandoc label: {0}", label.label),
         vscode.DiagnosticSeverity.Information,
       );
       diagnostic.source = EXTENSION_NAME;

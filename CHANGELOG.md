@@ -6,7 +6,8 @@ All notable changes to Papper Tools are documented in this file.
 
 ### Changed
 
-- Standardize command names, CodeLens and hover actions on English labels with the `Papper Tools:` prefix, preserving command IDs and existing keybindings.
+- Standardize English command names, CodeLens and hover actions with the `Papper Tools:` prefix, preserving command IDs and existing keybindings.
+- Follow VS Code's display language with English defaults and Simplified Chinese translations for command titles, settings, notifications, diagnostics, completion/hover help and preview controls, including dynamically generated Webview content.
 
 - Organize Papper settings into themed cards and named groups with short titles, separate descriptions, visible inheritance badges and aligned controls; collapse field paths, complete YAML editors and legacy DOCX options, and adapt navigation and bibliography previews to narrow windows.
 
