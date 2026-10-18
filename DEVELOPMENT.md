@@ -1,5 +1,23 @@
 # Development
 
+[README](README.md) · [Editor guide](docs/editor-guide.md) · [Implementation notes](docs/editor-internals.md)
+
+Use this page for source development, checks, packaging, and publication. The README covers installation and everyday manuscript work.
+
+## Run the extension locally
+
+Install the locked dependencies, then open this repository in VS Code:
+
+```powershell
+npm ci
+```
+
+Press **F5** and select **Run Papper Tools** to launch an Extension Development Host. The launch task bundles the extension first. Set the manuscript folder argument in `.vscode/launch.json` to a folder on your machine; use `test_project/` for the focused editing examples. Check references, formula hovers, Outline, configuration completion, settings, and previews in that window.
+
+Run `npm run check` for the existing type checks, tests, and bundle validation before a code release.
+
+## Papper configuration contract
+
 Configuration definitions are owned by Papper. After building the Papper CLI,
 regenerate this extension's offline contract and readable example with:
 
@@ -36,7 +54,7 @@ Type-check the TypeScript sources without emitting files:
 npm run typecheck
 ```
 
-Bundle `src/extension.ts` and runtime dependencies into `dist/extension.ts`:
+Bundle `src/extension.ts` and runtime dependencies into `dist/extension.js`:
 
 ```powershell
 npm run bundle
@@ -48,15 +66,11 @@ Create an installable VSIX package with:
 npm run package:vsix
 ```
 
-That command rebuilds the bundle, checks the generated bundle, then calls `vsce package`. The generated `.vsix` can be installed locally from VS Code with `Extensions: Install from VSIX...`, or from the command line:
-
-```powershell
-code --install-extension .\pandoc-manuscript-tools-0.0.1.vsix
-```
+That command runs the repository checks, rebuilds and validates the bundle, then calls `vsce package`. Install the generated `.vsix` locally through **Extensions: Install from VSIX...** in VS Code.
 
 ## Publish to VS Code Marketplace
 
-Marketplace publishing uses Microsoft's `vsce` CLI. Before publishing, replace `"publisher": "local"` in `package.json` with your real Marketplace publisher ID.
+Marketplace publishing uses Microsoft's `vsce` CLI. This repository's publisher is `cesaryuan`; authenticate with the account authorized to publish that extension.
 
 1. Create or open a publisher at <https://marketplace.visualstudio.com/manage/publishers/>.
 2. Create an Azure DevOps Personal Access Token that can publish Marketplace extensions.
@@ -80,5 +94,5 @@ npm run publish:patch
 
 `vsce publish patch` increments the patch version and publishes in one step, so use it only after the current working tree is ready to release.
 
-Before a public release, also add a repository URL so the Marketplace listing does not show a packaging warning.
+The repository URL in `package.json` supplies Marketplace source links. Keep README and documentation links relative to the repository so packaging can resolve them correctly.
 
