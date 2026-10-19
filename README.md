@@ -31,7 +31,7 @@ papper init my-paper
 cd my-paper
 ```
 
-Open that folder in VS Code and edit `manuscript.md`. If uv is already installed, **Papper Tools: Install or Update Papper** can also install or update Papper from the Command Palette.
+Open that folder in VS Code and edit `manuscript.md`. If uv is already installed, **Papper Tools: Install or Update Papper** can also install or update Papper from the Command Palette. Manual installs, updates, and confirmed automatic updates show the latest command output below the notification progress bar, with full logs in **View → Output → Papper Tools**.
 
 ![Conceptual illustration of Papper Tools: reference navigation, style controls, and manuscript preview.](docs/assets/papper-tools-workflow.png)
 

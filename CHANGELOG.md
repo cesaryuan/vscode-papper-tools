@@ -6,6 +6,7 @@ All notable changes to Papper Tools are documented in this file.
 
 ### Changed
 
+- Stream Papper installation and update command output into notification progress messages for manual and confirmed automatic updates, retaining full logs in the Papper Tools output channel.
 - Standardize English command names, CodeLens and hover actions with the `Papper Tools:` prefix, preserving command IDs and existing keybindings.
 - Follow VS Code's display language with English defaults and Simplified Chinese translations for command titles, settings, notifications, diagnostics, completion/hover help and preview controls, including dynamically generated Webview content.
 

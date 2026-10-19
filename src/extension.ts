@@ -54,7 +54,7 @@ export function activate(context: vscode.ExtensionContext) {
   const inlayMetadata = new InlayMetadataController(output);
   const cslStyles = new CslStyleController(output);
   const papperSettings = new PapperSettingsController(output, cslStyles, ensureConfiguration);
-  const papperUpdateChecker = new PapperUpdateChecker(context.globalState);
+  const papperUpdateChecker = new PapperUpdateChecker(context.globalState, output);
   let papperMaintenanceRunning = false;
   const fencedDivHighlighter = new FencedDivHighlighter(index, output);
   const inlineFoldController = new InlineFoldController(index, output);
@@ -163,9 +163,8 @@ export function activate(context: vscode.ExtensionContext) {
     try {
       await vscode.window.withProgress(
         { location: vscode.ProgressLocation.Notification, title: t("Installing or updating Papper") },
-        /** Streams uv progress to the shared extension output channel. */
-        async () => {
-          await installOrUpdatePapper(output);
+        async (progress) => {
+          await installOrUpdatePapper(output, progress);
           await configurationSync.ensure(true);
         },
       );

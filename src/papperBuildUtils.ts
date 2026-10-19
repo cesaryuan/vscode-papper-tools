@@ -2,6 +2,7 @@ import { t } from "./localization";
 import * as cp from "child_process";
 import * as fs from "fs/promises";
 import * as path from "path";
+import { stripVTControlCharacters } from "node:util";
 import * as vscode from "vscode";
 import { CHINESE_PYPI_MIRROR, shouldUseChinesePypiMirror } from "./papperToolPolicy";
 
@@ -11,7 +12,24 @@ export type RunProcessOptions = {
   output?: vscode.OutputChannel;
   captureStdout?: boolean;
   env?: NodeJS.ProcessEnv;
+  progress?: vscode.Progress<{ message?: string }>;
 };
+
+/** Displays the latest command output line, including carriage-return progress updates. */
+function createProcessProgressReporter(progress: vscode.Progress<{ message?: string }> | undefined): (text: string) => void {
+  let partialLine = "";
+  let lastMessage = "";
+  return (text) => {
+    if (!progress) return;
+    const lines = `${partialLine}${text}`.split(/\r\n|[\r\n]/);
+    partialLine = lines[lines.length - 1].slice(-8192);
+    const message = lines.map((line) => stripVTControlCharacters(line).trim()).filter(Boolean).pop()?.slice(-500);
+    if (message && message !== lastMessage) {
+      lastMessage = message;
+      progress.report({ message });
+    }
+  };
+}
 
 let cachedPapperExecutable: string | undefined;
 let papperResolutionPromise: Promise<string> | undefined;
@@ -124,7 +142,7 @@ export async function checkForPapperUpdate(): Promise<PapperUpdateInfo | undefin
 /**
  * Upgrades the installed Papper uv tool after the user has confirmed.
  */
-export async function upgradePapper() {
+export async function upgradePapper(output?: vscode.OutputChannel, progress?: vscode.Progress<{ message?: string }>) {
   if (papperResolutionPromise) {
     // A manual maintenance command already covers this automatic upgrade request.
     await papperResolutionPromise;
@@ -135,7 +153,8 @@ export async function upgradePapper() {
     throw new Error(t("`uv` is not available to upgrade Papper."));
   }
 
-  await runProcess(uvExecutable, ["tool", "upgrade", "papper"], {});
+  output?.appendLine("[Papper] Updating with `uv tool upgrade papper`.");
+  await runProcess(uvExecutable, ["tool", "upgrade", "papper"], { output, progress });
   cachedPapperExecutable = undefined;
 }
 
@@ -145,12 +164,12 @@ export async function upgradePapper() {
  * @param output Output channel receiving the uv command and its progress.
  * @returns The executable installed or refreshed by uv.
  */
-export async function installOrUpdatePapper(output: vscode.OutputChannel): Promise<string> {
+export async function installOrUpdatePapper(output: vscode.OutputChannel, progress?: vscode.Progress<{ message?: string }>): Promise<string> {
   if (papperResolutionPromise) {
     // Let a build's first-time installation finish before requesting an upgrade.
     await papperResolutionPromise;
   }
-  papperResolutionPromise = installPapperTool(output, true).finally(() => {
+  papperResolutionPromise = installPapperTool(output, true, progress).finally(() => {
     papperResolutionPromise = undefined;
   });
   return papperResolutionPromise;
@@ -220,7 +239,7 @@ export async function resolvePapperExecutable(output: vscode.OutputChannel) {
  * @param output Build log channel.
  * @param upgrade Whether to refresh an already installed uv tool.
  */
-async function installPapperTool(output: vscode.OutputChannel, upgrade = false) {
+async function installPapperTool(output: vscode.OutputChannel, upgrade = false, progress?: vscode.Progress<{ message?: string }>) {
   const uvExecutable = await findExecutableOnPath("uv");
   if (!uvExecutable) {
     throw new Error(t("`uv` is not available to install or update Papper. Install uv and reload VS Code before retrying."));
@@ -252,14 +271,14 @@ async function installPapperTool(output: vscode.OutputChannel, upgrade = false) 
   }
   output.appendLine(`[Papper] ${upgrade ? "Installing or updating" : "Installing"} with \`uv ${installArgs.join(" ")}\`.`);
   try {
-    await runProcess(uvExecutable, installArgs, { output });
+    await runProcess(uvExecutable, installArgs, { output, progress });
   } catch (error) {
     if (!useMirror) {
       throw error;
     }
     // A mirror outage must not prevent installation from the user's normal index.
     output.appendLine("[Papper] Mirror installation failed; retrying without a custom index.");
-    await runProcess(uvExecutable, fallbackArgs, { output });
+    await runProcess(uvExecutable, fallbackArgs, { output, progress });
   }
 
   toolBinDirectory = await runProcess(uvExecutable, ["tool", "dir", "--bin"], { captureStdout: true });
@@ -411,17 +430,21 @@ export function runProcess(command: string, args: string[], options: RunProcessO
 
     let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (chunk) => {
-      const text = chunk.toString();
+    const reportStdout = createProcessProgressReporter(options.progress);
+    const reportStderr = createProcessProgressReporter(options.progress);
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (text: string) => {
       if (options.captureStdout) {
         stdout += text;
       }
       options.output?.append(text);
+      reportStdout(text);
     });
-    child.stderr.on("data", (chunk) => {
-      const text = chunk.toString();
+    child.stderr.on("data", (text: string) => {
       stderr = `${stderr}${text}`.slice(-8192);
       options.output?.append(text);
+      reportStderr(text);
     });
 
     child.on("error", reject);

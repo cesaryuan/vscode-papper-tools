@@ -31,7 +31,7 @@ papper init my-paper
 cd my-paper
 ```
 
-用 VS Code 打开该文件夹，编辑 `manuscript.md` 即可。已经安装 uv 时，也可以在命令面板运行 **Papper Tools: Install or Update Papper** 安装或更新 Papper。
+用 VS Code 打开该文件夹，编辑 `manuscript.md` 即可。已经安装 uv 时，也可以在命令面板运行 **Papper Tools: Install or Update Papper** 安装或更新 Papper。手动安装、更新及确认自动更新后，通知进度条下方会实时显示更新命令的最新输出；完整日志保留在 **查看 → 输出 → Papper Tools**。
 
 ![Papper Tools 工作流示意：引用导航、样式设置和稿件预览。](docs/assets/papper-tools-workflow.png)
 

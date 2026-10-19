@@ -14,7 +14,7 @@ export class PapperUpdateChecker {
   private promptRunning = false;
 
   /** Creates a checker that persists the last check across VS Code sessions. */
-  constructor(private readonly state: vscode.Memento) {}
+  constructor(private readonly state: vscode.Memento, private readonly output: vscode.OutputChannel) {}
 
   /** Starts the delayed initial check and recurring checks every three hours. */
   start() {
@@ -69,7 +69,7 @@ export class PapperUpdateChecker {
 
       await vscode.window.withProgress(
         { location: vscode.ProgressLocation.Notification, title: t("Updating Papper") },
-        async () => upgradePapper(),
+        async (progress) => upgradePapper(this.output, progress),
       );
       void vscode.window.showInformationMessage(t("Papper has been updated."));
     } catch (error) {
