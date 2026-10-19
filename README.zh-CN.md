@@ -106,6 +106,6 @@ HTML 方便写作时检查内容，最终分页请在 Word 中确认。[Papper �
 | 扫描、配置定义和预览的实现 | [实现说明](docs/editor-internals.md) |
 | 版本变化 | [更新日志](CHANGELOG.md) |
 
-遇到问题时，请[提交 issue](https://github.com/cesaryuan/vscode-pandoc-manuscript-tools/issues)，附扩展版本、相关的 Papper 版本和最小示例。构建与预览日志位于 **查看 → 输出 → Papper Tools**。
+遇到问题时，请[提交 issue](https://github.com/cesaryuan/vscode-papper-tools/issues)，附扩展版本、相关的 Papper 版本和最小示例。构建与预览日志位于 **查看 → 输出 → Papper Tools**。
 
 采用 [GPL-3.0-or-later 许可证](LICENSE)。

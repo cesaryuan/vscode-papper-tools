@@ -106,6 +106,6 @@ English paragraph and code-comment translation is available on hover. This uses 
 | Scanner, configuration contracts, and preview implementation | [Implementation notes](docs/editor-internals.md) |
 | Changes between releases | [Changelog](CHANGELOG.md) |
 
-For a problem, [open an issue](https://github.com/cesaryuan/vscode-pandoc-manuscript-tools/issues) with the extension version, Papper version where relevant, and a small example. Build and preview logs are in **View → Output → Papper Tools**.
+For a problem, [open an issue](https://github.com/cesaryuan/vscode-papper-tools/issues) with the extension version, Papper version where relevant, and a small example. Build and preview logs are in **View → Output → Papper Tools**.
 
 Licensed under [GPL-3.0-or-later](LICENSE).

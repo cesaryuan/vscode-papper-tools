@@ -7,12 +7,12 @@
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "https://github.com/cesaryuan/vscode-pandoc-manuscript-tools.git"
+    "url": "https://github.com/cesaryuan/vscode-papper-tools.git"
   },
   "bugs": {
-    "url": "https://github.com/cesaryuan/vscode-pandoc-manuscript-tools/issues"
+    "url": "https://github.com/cesaryuan/vscode-papper-tools/issues"
   },
-  "homepage": "https://github.com/cesaryuan/vscode-pandoc-manuscript-tools#readme",
+  "homepage": "https://github.com/cesaryuan/vscode-papper-tools#readme",
   "engines": {
     "vscode": "^1.90.0"
   },
