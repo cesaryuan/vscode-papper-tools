@@ -1,6 +1,6 @@
 import { configureLocalization, t } from "./localization";
 import * as vscode from "vscode";
-import { EXTENSION_NAME, PANDOC_SELECTOR, IMAGE_PREVIEW_SELECTOR, MATH_HOVER_SELECTOR, BUILD_DOCX_COMMAND, BUILD_HTML_COMMAND, INSTALL_OR_UPDATE_PAPPER_COMMAND, OPEN_IMAGE_PREVIEW_COMMAND, OPEN_IMAGE_DIRECTORY_PREVIEW_COMMAND, OPEN_SVG_PREVIEW_COMMAND, OPEN_SVG_SOURCE_TEXT_COMMAND, METAFILE_PREVIEW_EDITOR_VIEW_TYPE, SVG_PREVIEW_EDITOR_VIEW_TYPE } from "./constants";
+import { EXTENSION_NAME, PANDOC_SELECTOR, IMAGE_PREVIEW_SELECTOR, MATH_HOVER_SELECTOR, BUILD_DOCX_COMMAND, BUILD_HTML_COMMAND, OPEN_EXTERNAL_COMMAND, INSTALL_OR_UPDATE_PAPPER_COMMAND, OPEN_IMAGE_PREVIEW_COMMAND, OPEN_IMAGE_DIRECTORY_PREVIEW_COMMAND, OPEN_SVG_PREVIEW_COMMAND, OPEN_SVG_SOURCE_TEXT_COMMAND, METAFILE_PREVIEW_EDITOR_VIEW_TYPE, SVG_PREVIEW_EDITOR_VIEW_TYPE } from "./constants";
 import { PandocWorkspaceIndex } from "./workspaceIndex";
 import { PandocBuildRunner } from "./docxBuild";
 import { PapperMarkdownPreviewController } from "./papperMarkdownPreview/controller";
@@ -26,6 +26,7 @@ import { MarkdownYamlHeaderCompletionProvider, MarkdownYamlHeaderHoverProvider }
 import { ElementAttributeProvider } from "./elementAttributes/providers";
 import { PapperSettingsController, OPEN_PAPPER_SETTINGS_COMMAND } from "./papperSettings/controller";
 import { PapperConfigurationSync } from "./papperConfigurationSync";
+import { openFileWithDefaultApplication } from "./externalFileOpener";
 
 /**
  * Activates the local Pandoc Markdown helper extension.
@@ -132,6 +133,9 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.commands.registerCommand(BUILD_DOCX_COMMAND, async (uri: vscode.Uri | undefined) => {
     await buildRunner.buildActiveMarkdownDocx(uri);
   }));
+  context.subscriptions.push(vscode.commands.registerCommand(OPEN_EXTERNAL_COMMAND,
+    /** Preserves explicit menu targets, including files in inactive editor groups. */
+    (uri: vscode.Uri | undefined) => openFileWithDefaultApplication(uri, output)));
   context.subscriptions.push(vscode.commands.registerCommand(BUILD_HTML_COMMAND, async (uri: vscode.Uri | undefined) => {
     await markdownPreview.buildActiveMarkdownHtml(uri);
   }));

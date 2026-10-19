@@ -1,4 +1,7 @@
 {
+  "Select a saved local file to open with the default application": "请选择已保存的本地文件以使用系统默认应用打开",
+  "The system could not open the file with its default application": "系统无法使用默认应用打开此文件",
+  "Could not open {0} with the default application: {1}": "无法使用系统默认应用打开 {0}：{1}",
   "\n\n![Rendered equation preview]({0})\n\n": "\n\n![渲染后的公式预览]({0})\n\n",
   "\n\n![Rendered inline equation preview]({0})\n\n": "\n\n![渲染后的行内公式预览]({0})\n\n",
   "\n\n$(warning) Duplicate definitions were found for this label.": "\n\n$(warning) 此标签存在重复定义",

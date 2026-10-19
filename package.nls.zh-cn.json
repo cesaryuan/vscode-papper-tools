@@ -6,6 +6,7 @@
   "command.rebuildIndex": "Papper Tools: 重建索引",
   "command.buildDocxAndOpen": "Papper Tools: 构建 DOCX 并在 Word 中打开",
   "command.buildHtmlAndOpen": "Papper Tools: 预览 Markdown（Papper HTML）",
+  "command.openWithDefaultApplication": "Papper Tools: 用系统默认应用打开",
   "command.installOrUpdatePapper": "Papper Tools: 安装或更新 Papper",
   "command.openImagePreviewToSide": "Papper Tools: 在侧边打开图片预览",
   "command.openImageDirectoryPreview": "Papper Tools: 查看图片",

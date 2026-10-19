@@ -14,6 +14,7 @@ All notable changes to Papper Tools are documented in this file.
 
 ### Added
 
+- Add **Open with Default Application** to the editor toolbar, file context menu and Command Palette, including binary/custom editor tabs and Unicode Windows paths.
 - Add table-caption and empty `[]{t="..."}` attribute completion/hover from Papper's exported catalog, with exact per-type options, value choices, accepted aliases and offline fallback.
 
 - Search Zotero Chinese community journal and thesis styles alongside the official repository, label each result's source, show community-generated citation/bibliography previews and download community CSL files into the workspace; keep either library usable when the other fails and retry failed sources on later searches.

@@ -1,4 +1,7 @@
 {
+  "Select a saved local file to open with the default application": "Select a saved local file to open with the default application",
+  "The system could not open the file with its default application": "The system could not open the file with its default application",
+  "Could not open {0} with the default application: {1}": "Could not open {0} with the default application: {1}",
   "\n\n![Rendered equation preview]({0})\n\n": "\n\n![Rendered equation preview]({0})\n\n",
   "\n\n![Rendered inline equation preview]({0})\n\n": "\n\n![Rendered inline equation preview]({0})\n\n",
   "\n\n$(warning) Duplicate definitions were found for this label.": "\n\n$(warning) Duplicate definitions were found for this label.",

@@ -6,6 +6,7 @@
   "command.rebuildIndex": "Papper Tools: Rebuild Index",
   "command.buildDocxAndOpen": "Papper Tools: Build DOCX and Open in Word",
   "command.buildHtmlAndOpen": "Papper Tools: Preview Markdown (Papper HTML)",
+  "command.openWithDefaultApplication": "Papper Tools: Open with Default Application",
   "command.installOrUpdatePapper": "Papper Tools: Install or Update Papper",
   "command.openImagePreviewToSide": "Papper Tools: Open Image Preview to the Side",
   "command.openImageDirectoryPreview": "Papper Tools: View Images",

@@ -4,6 +4,7 @@ export const IMAGE_PREVIEW_SELECTOR = [...PANDOC_SELECTOR, { language: "html" },
 export const MATH_HOVER_SELECTOR = [...PANDOC_SELECTOR, { language: "latex" }];
 export const BUILD_DOCX_COMMAND = "pandocManuscriptTools.buildDocxAndOpen";
 export const BUILD_HTML_COMMAND = "pandocManuscriptTools.buildHtmlAndOpen";
+export const OPEN_EXTERNAL_COMMAND = "pandocManuscriptTools.openWithDefaultApplication";
 export const INSTALL_OR_UPDATE_PAPPER_COMMAND = "pandocManuscriptTools.installOrUpdatePapper";
 export const CAN_BUILD_HTML_CONTEXT = "pandocManuscriptTools.canBuildHtml";
 export const OPEN_IMAGE_PREVIEW_COMMAND = "pandocManuscriptTools.openImagePreviewToSide";
