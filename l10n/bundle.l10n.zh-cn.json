@@ -184,6 +184,7 @@
   "DOCX table row height; supports cm, mm, in and pt": "DOCX 表格行高，支持 cm、mm、in、pt",
   "Downloading citation style: {0}": "正在下载参考文献样式：{0}",
   "Duplicate Pandoc label: {0}": "重复的 Pandoc 标签：{0}",
+  "Unreferenced Pandoc figure or table: {0}": "未被引用的 Pandoc 图或表：{0}",
   "Edit directly: {0} (complete value)": "直接编辑：{0}（完整值）",
   "Edit directly: {0} (YAML)": "直接编辑：{0}（YAML）",
   "Edit This Style": "编辑此样式",

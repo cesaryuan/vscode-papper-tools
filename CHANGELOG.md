@@ -14,6 +14,7 @@ All notable changes to Papper Tools are documented in this file.
 
 ### Added
 
+- Warn in Problems about figure/table labels without a cross reference in the current document, updating as references are edited.
 - Add **Open with Default Application** to the editor toolbar, file context menu and Command Palette, including binary/custom editor tabs and Unicode Windows paths.
 - Add table-caption and empty `[]{t="..."}` attribute completion/hover from Papper's exported catalog, with exact per-type options, value choices, accepted aliases and offline fallback.
 

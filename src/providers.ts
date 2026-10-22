@@ -1809,6 +1809,17 @@ export function updateDiagnostics(document: vscode.TextDocument, index: PandocWo
   }
 
   for (const label of parsed.labels) {
+    // Count only parsed references in this document; literal examples and other manuscripts cannot mark a figure/table as used.
+    if ((label.prefix === "fig" || label.prefix === "tbl") && !parsed.referenceMap.has(label.label)) {
+      const diagnostic = new vscode.Diagnostic(
+        toRange(label.fullRange),
+        t("Unreferenced Pandoc figure or table: {0}", label.label),
+        vscode.DiagnosticSeverity.Warning,
+      );
+      diagnostic.source = EXTENSION_NAME;
+      documentDiagnostics.push(diagnostic);
+    }
+
     const definitions = definitionMap.get(label.label) || [];
     if (definitions.length > 1) {
       const diagnostic = new vscode.Diagnostic(

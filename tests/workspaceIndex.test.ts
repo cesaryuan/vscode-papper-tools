@@ -8,6 +8,7 @@ import { SourceModuleFixture } from "./helpers/sourceModule";
 /** Supplies definition files and editor buffers independently of each other. */
 class IndexFixture {
   readonly index: PandocWorkspaceIndex;
+  readonly updateDiagnostics: typeof import("../src/providers").updateDiagnostics;
   readonly documents: vscode.TextDocument[] = [];
   source = "![Manuscript](image.png){#fig:source}";
   failure: string | undefined;
@@ -16,6 +17,19 @@ class IndexFixture {
   constructor() {
     const fixture = this;
     const host = {
+      DiagnosticSeverity: { Warning: 1, Information: 2 },
+      Diagnostic: class {
+        /** Retains the diagnostic payload emitted to Problems. */
+        constructor(public range: unknown, public message: string, public severity: number) {}
+      },
+      Position: class {
+        /** Preserves editor coordinates for diagnostic location assertions. */
+        constructor(public line: number, public character: number) {}
+      },
+      Range: class {
+        /** Retains the highlighted definition or reference range. */
+        constructor(public start: unknown, public end: unknown) {}
+      },
       workspace: {
         textDocuments: this.documents,
         /** Resolves the reviewer's workspace-level manuscript source. */
@@ -29,10 +43,12 @@ class IndexFixture {
       Uri: { /** Resolves the root manuscript path as the production code requests it. */
         joinPath: (_root: vscode.Uri, name: string) => IndexFixture.uri(name) },
     };
-    const module = new SourceModuleFixture({ vscode: host,
+    const modules = new SourceModuleFixture({ vscode: host,
       "src/configuration.ts": { /** Disables optional workspace preloading in this definition-scope fixture. */
-        getConfiguration: () => ({ /** Keeps the index on open buffers plus reviewer dependencies. */ get: () => false }) },
-    }).load<{ PandocWorkspaceIndex: typeof PandocWorkspaceIndex }>("src/workspaceIndex.ts");
+        getConfiguration: () => ({ /** Uses defaults for diagnostics and workspace preloading. */ get: (_key: string, fallback: unknown) => fallback }) },
+    });
+    const module = modules.load<{ PandocWorkspaceIndex: typeof PandocWorkspaceIndex }>("src/workspaceIndex.ts");
+    this.updateDiagnostics = modules.load<typeof import("../src/providers")>("src/providers.ts").updateDiagnostics;
     this.index = new module.PandocWorkspaceIndex({ /** Suppresses expected missing-file diagnostics. */ appendLine() {} } as unknown as vscode.OutputChannel);
   }
 
@@ -130,3 +146,42 @@ async function reloadsSavedReviewerDefinitionsOnClose(): Promise<void> {
 
 test("closed/reopened buffers cannot reuse stale definitions with the same version", releasesClosedDocumentVersions);
 test("closing discarded manuscript edits restores saved reviewer definitions", reloadsSavedReviewerDefinitionsOnClose);
+
+/** Problems warn at unused figure/table definitions and follow real reference edits, excluding literal examples. */
+function diagnosesUnreferencedFiguresAndTables(): void {
+  const fixture = new IndexFixture();
+  const source = [
+    "![Plot](plot.png){#fig:plot}", "", "Table: Results {#tbl:results}", "",
+    "# Section {#sec:intro}", "", "$$x$$ {#eq:value}", "",
+    "`@fig:plot`", "<!-- @tbl:results -->", "```md", "@fig:plot", "```",
+  ].join("\n");
+  const document = fixture.document("manuscript.md", source);
+  // Another document's references do not satisfy this manuscript's citation requirement.
+  fixture.index.updateDocument(fixture.document("other.md", "See @fig:plot and @tbl:results"));
+  let problems: readonly vscode.Diagnostic[] = [];
+  const collection = {
+    /** Captures the complete Problems replacement on each editor refresh. */
+    set(_uri: vscode.Uri, entries: readonly vscode.Diagnostic[]) { problems = entries; },
+  } as vscode.DiagnosticCollection;
+  fixture.updateDiagnostics(document, fixture.index, collection);
+  assert.equal(problems.length, 2);
+  assert.ok(problems.every((problem) => problem.severity === 1));
+  assert.deepEqual(problems.map((problem) => problem.range.start.line), [0, 2]);
+  assert.ok(problems[0].message.includes("fig:plot"));
+  assert.ok(problems[1].message.includes("tbl:results"));
+
+  const edited = document as unknown as { version: number; getText: () => string };
+  edited.version += 1;
+  /** Adds grouped prose references to the unsaved editor buffer. */
+  edited.getText = () => `${source}\nSee [@fig:plot; @tbl:results].`;
+  fixture.updateDiagnostics(document, fixture.index, collection);
+  assert.equal(problems.length, 0);
+
+  edited.version += 1;
+  /** Removes the references so both warnings must return. */
+  edited.getText = () => source;
+  fixture.updateDiagnostics(document, fixture.index, collection);
+  assert.equal(problems.length, 2);
+}
+
+test("Problems warn for unused figures/tables and clear after prose references are added", diagnosesUnreferencedFiguresAndTables);

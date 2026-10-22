@@ -184,6 +184,7 @@
   "DOCX table row height; supports cm, mm, in and pt": "DOCX table row height; supports cm, mm, in and pt",
   "Downloading citation style: {0}": "Downloading citation style: {0}",
   "Duplicate Pandoc label: {0}": "Duplicate Pandoc label: {0}",
+  "Unreferenced Pandoc figure or table: {0}": "Unreferenced Pandoc figure or table: {0}",
   "Edit directly: {0} (complete value)": "Edit directly: {0} (complete value)",
   "Edit directly: {0} (YAML)": "Edit directly: {0} (YAML)",
   "Edit This Style": "Edit This Style",
