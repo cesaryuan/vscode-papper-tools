@@ -76,7 +76,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.languages.registerDefinitionProvider(PANDOC_SELECTOR, new PandocDefinitionProvider(index)));
   context.subscriptions.push(vscode.languages.registerReferenceProvider(PANDOC_SELECTOR, new PandocReferenceProvider(index)));
   context.subscriptions.push(vscode.languages.registerHoverProvider(IMAGE_PREVIEW_SELECTOR, new ImagePreviewHoverProvider(imagePreviewRenderer, output)));
-  context.subscriptions.push(vscode.languages.registerHoverProvider(MATH_HOVER_SELECTOR, new PandocHoverProvider(index, mathRenderer, paragraphTranslator, output)));
+  context.subscriptions.push(vscode.languages.registerHoverProvider(MATH_HOVER_SELECTOR, new PandocHoverProvider(index, mathRenderer, paragraphTranslator, output, inlayHints)));
   context.subscriptions.push(vscode.languages.registerHoverProvider(PANDOC_SELECTOR, manuscriptStyles));
   context.subscriptions.push(vscode.commands.registerCommand(SET_MANUSCRIPT_STYLE_COMMAND,
     /** Resolves the resource encoded in the hover link even when another editor is active. */
@@ -244,7 +244,8 @@ export function activate(context: vscode.ExtensionContext) {
     ) {
       inlineFoldController.updateVisibleEditors();
     }
-    if (event.affectsConfiguration("pandocManuscriptTools.enableNumberInlayHints")) {
+    if (event.affectsConfiguration("pandocManuscriptTools.enableNumberInlayHints")
+      || event.affectsConfiguration("pandocManuscriptTools.enableParagraphHoverTranslation")) {
       inlayHints.refreshOpenDocuments();
     }
   }));

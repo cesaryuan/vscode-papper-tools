@@ -8,7 +8,7 @@ import type { ReferenceHint } from "./references";
 import { appendInlayMetadataActions } from "./actions";
 import type { InlayMetadataField } from "./settings";
 
-type CachedInlayHints = { version: number; hints: vscode.InlayHint[] };
+type CachedInlayHints = { version: number; hints: vscode.InlayHint[]; references: ReferenceHint[] };
 type RefreshState = { document: vscode.TextDocument; timer?: NodeJS.Timeout; running: boolean; rerun: boolean };
 
 /**
@@ -57,6 +57,14 @@ export class PandocInlayHints implements vscode.InlayHintsProvider, vscode.Dispo
     return cached.hints.filter((hint) => range.contains(hint.position));
   }
 
+  /** Shares only references built from the current editor version; a pending build leaves authored text intact. */
+  getRenderedReferences(document: vscode.TextDocument): readonly ReferenceHint[] {
+    const cached = this.cache.get(document.uri.toString());
+    if (cached?.version === document.version) return cached.references;
+    this.scheduleRefresh(document);
+    return [];
+  }
+
   /**
    * Schedules one debounced JSON AST build for the current document version.
    *
@@ -64,7 +72,7 @@ export class PandocInlayHints implements vscode.InlayHintsProvider, vscode.Dispo
    * @param delayMs Delay before invoking Papper.
    */
   scheduleRefresh(document: vscode.TextDocument, delayMs = 1000): void {
-    if (!isBuildableMarkdownDocument(document) || !getConfiguration().get("enableNumberInlayHints", true)) {
+    if (!isBuildableMarkdownDocument(document) || !this.needsReferenceBuild()) {
       return;
     }
 
@@ -116,7 +124,7 @@ export class PandocInlayHints implements vscode.InlayHintsProvider, vscode.Dispo
    * Refreshes or clears hints when the feature setting changes.
    */
   refreshOpenDocuments(): void {
-    if (!getConfiguration().get("enableNumberInlayHints", true)) {
+    if (!this.needsReferenceBuild()) {
       for (const state of this.refreshStates.values()) {
         if (state.timer) {
           clearTimeout(state.timer);
@@ -128,6 +136,7 @@ export class PandocInlayHints implements vscode.InlayHintsProvider, vscode.Dispo
       return;
     }
 
+    this.changed.fire();
     for (const document of vscode.workspace.textDocuments) {
       if (isPandocDocument(document)) {
         this.scheduleRefresh(document, 0);
@@ -147,6 +156,12 @@ export class PandocInlayHints implements vscode.InlayHintsProvider, vscode.Dispo
     this.refreshStates.clear();
     this.cache.clear();
     this.changed.dispose();
+  }
+
+  /** Translation needs processed references even when their editor hints are hidden. */
+  private needsReferenceBuild(): boolean {
+    const config = getConfiguration();
+    return config.get("enableNumberInlayHints", true) || config.get("enableParagraphHoverTranslation", true);
   }
 
   /**
@@ -178,11 +193,11 @@ export class PandocInlayHints implements vscode.InlayHintsProvider, vscode.Dispo
         ...(result?.references.map((reference) => toReferenceInlayHint(reference, uriText, result.ast)) ?? []),
       ];
       hints.sort((left, right) => left.position.compareTo(right.position));
-      this.cache.set(uriText, { version, hints });
+      this.cache.set(uriText, { version, hints, references: result?.references ?? [] });
       this.changed.fire();
     } catch (error) {
       if (this.refreshStates.get(uriText) === state && state.document.version === version) {
-        this.cache.set(uriText, { version, hints: [] });
+        this.cache.set(uriText, { version, hints: [], references: [] });
         this.changed.fire();
       }
       this.output.appendLine(`[Inlay hints] Could not refresh hints for ${document.uri.fsPath}: ${String(error)}`);

@@ -12,6 +12,8 @@ import type { ImagePreviewRenderer } from "./imagePreview";
 import type { HeadingEntry, InlineMathEntry, LabelEntry, MathBlockEntry, PandocTokenAtPosition, ParsedPandocDocument, PlainPosition, PlainRange, ReferenceEntry } from "./parser";
 import { diffParagraphSentences, diffParagraphWords, formatDiffTranslationInput, resolveParagraphDiff } from "./paragraphTranslationDiff";
 import type { ParagraphDiffSide, ParagraphSentenceDiff } from "./paragraphTranslationDiff";
+import type { PandocInlayHints } from "./inlayHints";
+import { replaceRenderedReferences, replaceRenderedReferenceParts } from "./inlayHints/references";
 
 const MAX_TRANSLATABLE_CJK_RATIO = 0.3;
 
@@ -87,8 +89,10 @@ export class PandocHoverProvider {
    * @param mathRenderer MathJax SVG renderer.
    * @param paragraphTranslator Paragraph translation service.
    * @param output Output channel for hover diagnostics.
+   * @param references Shared Papper reference results from the inlay provider.
    */
-  constructor(index: PandocWorkspaceIndex, mathRenderer: MathJaxRenderer, paragraphTranslator: ParagraphTranslator, output: vscode.OutputChannel) {
+  constructor(index: PandocWorkspaceIndex, mathRenderer: MathJaxRenderer, paragraphTranslator: ParagraphTranslator, output: vscode.OutputChannel,
+    private readonly references?: Pick<PandocInlayHints, "getRenderedReferences">) {
     this.index = index;
     this.mathRenderer = mathRenderer;
     this.paragraphTranslator = paragraphTranslator;
@@ -147,7 +151,14 @@ export class PandocHoverProvider {
 
       const paragraphHover = findParagraphHover(document, parsed, position);
       if (paragraphHover) {
-        const paragraphMarkdown = await buildParagraphHover(document, position, paragraphHover, this.mathRenderer, this.paragraphTranslator, this.output, cancellationToken);
+        const references = paragraphHover.showTranslation ? this.references?.getRenderedReferences(document) ?? [] : [];
+        if (paragraphHover.showTranslation && !paragraphHover.isStandaloneComment) {
+          paragraphHover.translationText = replaceRenderedReferences(paragraphHover.text, paragraphHover.range.start, references);
+        }
+        /** Keeps authored diff states while replacing complete references before translator HTML is generated. */
+        const prepareDiffParts = (parts: readonly DiffTranslationPart[]): DiffTranslationPart[] =>
+          replaceRenderedReferenceParts(parts, paragraphHover.text, paragraphHover.range.start, references);
+        const paragraphMarkdown = await buildParagraphHover(document, position, paragraphHover, this.mathRenderer, this.paragraphTranslator, this.output, cancellationToken, prepareDiffParts);
         if (paragraphMarkdown) {
           return new vscode.Hover(paragraphMarkdown, paragraphHover.range);
         }
@@ -710,6 +721,7 @@ async function buildInlineMathHover(inlineMath: import("./parser").InlineMathEnt
  * @param paragraphTranslator Paragraph translation service.
  * @param output Output channel for recoverable diff-hover failures.
  * @param token Hover cancellation token.
+ * @param prepareDiffParts Replaces references while preserving authored diff states.
  */
 async function buildParagraphHover(
   document: vscode.TextDocument,
@@ -719,11 +731,12 @@ async function buildParagraphHover(
   paragraphTranslator: ParagraphTranslator,
   output: vscode.OutputChannel,
   token: vscode.CancellationToken,
+  prepareDiffParts: (parts: readonly DiffTranslationPart[]) => DiffTranslationPart[],
 ) {
   const markdown = new vscode.MarkdownString(undefined, true);
   let hasContent = false;
 
-  const diffTranslation = await buildDiffAwareParagraphTranslation(document, position, paragraph, mathRenderer, paragraphTranslator, output, token);
+  const diffTranslation = await buildDiffAwareParagraphTranslation(document, position, paragraph, mathRenderer, paragraphTranslator, output, token, prepareDiffParts);
   if (token.isCancellationRequested) {
     return undefined;
   }
@@ -765,6 +778,7 @@ async function buildParagraphHover(
  * @param paragraphTranslator Paragraph translation service.
  * @param output Output channel for recoverable diff-hover failures.
  * @param token Hover cancellation token.
+ * @param prepareDiffParts Replaces references after source diff alignment.
  */
 async function buildDiffAwareParagraphTranslation(
   document: vscode.TextDocument,
@@ -774,6 +788,7 @@ async function buildDiffAwareParagraphTranslation(
   paragraphTranslator: ParagraphTranslator,
   output: vscode.OutputChannel,
   token: vscode.CancellationToken,
+  prepareDiffParts: (parts: readonly DiffTranslationPart[]) => DiffTranslationPart[],
 ): Promise<RenderedTranslation | undefined> {
   if (
     !paragraph.showTranslation
@@ -815,7 +830,7 @@ async function buildDiffAwareParagraphTranslation(
       return undefined;
     }
 
-    const markedInput = formatDiffTranslationInput(currentWords);
+    const markedInput = formatDiffTranslationInput(prepareDiffParts(currentWords));
     const markedTranslation = await paragraphTranslator.translateText(markedInput);
     if (markedTranslation && !token.isCancellationRequested) {
       const markedParts = parseDiffTranslationParts(markedTranslation.text);
@@ -838,7 +853,7 @@ async function buildDiffAwareParagraphTranslation(
 
     // A provider may remove token markers even though it can translate plain
     // HTML. Keep the previous sentence-level presentation as a safe fallback.
-    return buildSentenceDiffTranslation(paragraphDiff, mathRenderer, paragraphTranslator, token);
+    return buildSentenceDiffTranslation(paragraphDiff, mathRenderer, paragraphTranslator, token, prepareDiffParts);
   } catch (error) {
     output.appendLine(`Diff-aware paragraph translation fell back to the ordinary hover: ${formatError(error)}`);
     return undefined;
@@ -852,15 +867,20 @@ async function buildDiffAwareParagraphTranslation(
  * @param mathRenderer MathJax SVG renderer.
  * @param paragraphTranslator Paragraph translation service.
  * @param token Hover cancellation token.
+ * @param prepareDiffParts Replaces references while retaining sentence change states.
  */
 async function buildSentenceDiffTranslation(
   paragraphDiff: { side: ParagraphDiffSide; originalText: string; modifiedText: string },
   mathRenderer: MathJaxRenderer,
   paragraphTranslator: ParagraphTranslator,
   token: vscode.CancellationToken,
+  prepareDiffParts: (parts: readonly DiffTranslationPart[]) => DiffTranslationPart[],
 ): Promise<RenderedTranslation | undefined> {
   const sentenceDiff = diffParagraphSentences(paragraphDiff.originalText, paragraphDiff.modifiedText);
-  const currentSentences = paragraphDiff.side === "original" ? sentenceDiff.original : sentenceDiff.modified;
+  const sourceSentences = paragraphDiff.side === "original" ? sentenceDiff.original : sentenceDiff.modified;
+  const currentSentences = prepareDiffParts(sourceSentences.map((sentence, index) => ({
+    ...sentence, text: `${index > 0 ? " " : ""}${sentence.text}`,
+  })));
   if (currentSentences.length === 0 || currentSentences.every((sentence) => sentence.kind === "equal")) {
     return undefined;
   }
@@ -998,9 +1018,8 @@ function formatDiffTranslatedPart(renderedPart: string, part: { kind: "equal" | 
 /**
  * Builds the optional translated paragraph preview.
  *
- * The full paragraph, including TeX, is sent to the translation engine because
- * the user wants translation to see the same text that appears in the editor;
- * surviving inline TeX is rendered before showing the hover.
+ * The full paragraph, including TeX and resolved reference text, is sent to the
+ * translation engine; surviving inline TeX is rendered before showing the hover.
  *
  * @param paragraph Paragraph hover data.
  * @param mathRenderer MathJax SVG renderer.
