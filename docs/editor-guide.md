@@ -97,6 +97,37 @@ Keep Papper up to date if preview startup reports missing editor-buffer support.
 
 ## DOCX builds
 
+Run **Papper Tools: DOCX Paginated Preview (Experimental)** for an independent side panel.
+Use a Papper build with embedded PDF preview support; a separate Docxide executable
+is no longer required. For Remote SSH/WSL, Papper and the manuscript fonts must be
+available on the extension host.
+
+The preview reads the current editor buffer without saving it. Editing refreshes
+an open preview after a 700 ms pause; configure `docxPreview.editDelay` or disable
+`pandocManuscriptTools.docxPreview.refreshOnEdit` to stop edit-triggered refreshes.
+Saving refreshes immediately by default. For manual refresh only, also disable
+`pandocManuscriptTools.docxPreview.refreshOnSave`. **Refresh preview** uses the
+current buffer immediately. Builds run serially and combine pending edits.
+The viewer shares the image preview's compact, theme-aware icon toolbar, with fit
+width, actual size, 50–300% zoom and physical page navigation. Hold **Ctrl** and turn
+the mouse wheel over the document to zoom around the pointer; ordinary wheel input
+scrolls the pages. Existing page images stay visible while zoomed pages are redrawn.
+The previous/next and zoom buttons disable at their respective boundaries. It preserves
+the page and relative offset across refresh, clamps the position when a document gets
+shorter, and retains the last successful document when a new build or PDF load fails.
+Closing the panel stops its owned service and removes its private generated files.
+
+The build uses normal Papper DOCX settings, including configured MathType conversion,
+but always resolves cross-references to static numbers instead of enabling
+`docxNativeCrossref`. Ordinary Word exports still follow that setting. SVG PNG
+fallbacks remain enabled so the renderer can display the pictures.
+Enabled MathType equations use the Rust backend in this preview, without requiring
+a MathType installation. Disabling MathType keeps native Word equations. Normal
+exports keep the selected formula backend; preview formula fonts and sizes can differ.
+This experimental view uses Docxide's pagination and field support, which can differ
+from Word. It does not synchronize the source cursor/scroll.
+Check final layout and updated table-of-contents fields in Word.
+
 **Papper Tools: Build DOCX and Open in Word** saves the current Markdown file, builds a Word document, and opens it. Each build uses a separate temporary directory, so it does not overwrite a document already open in Word. Use Word's **Save As** to keep the result, or run `papper build docx` in the manuscript project to create the normal project output.
 
 ## Troubleshooting

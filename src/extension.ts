@@ -4,6 +4,8 @@ import { EXTENSION_NAME, PANDOC_SELECTOR, IMAGE_PREVIEW_SELECTOR, MATH_HOVER_SEL
 import { PandocWorkspaceIndex } from "./workspaceIndex";
 import { PandocBuildRunner } from "./docxBuild";
 import { PapperMarkdownPreviewController } from "./papperMarkdownPreview/controller";
+import { DocxPreviewController } from "./docxPreview/controller";
+import { OPEN_DOCX_PREVIEW_COMMAND } from "./constants";
 import { FencedDivHighlighter } from "./fencedDivHighlighter";
 import { InlineFoldController } from "./inlineFoldController";
 import { MathJaxRenderer } from "./mathJaxRenderer";
@@ -51,6 +53,8 @@ export function activate(context: vscode.ExtensionContext) {
   const metafilePreviewEditorProvider = new MetafilePreviewCustomEditorProvider(imagePreviewRenderer, output);
   const buildRunner = new PandocBuildRunner(output);
   const markdownPreview = new PapperMarkdownPreviewController(output);
+  const docxPreview = new DocxPreviewController(context.extensionUri, output);
+  context.subscriptions.push(docxPreview);
   const inlayHints = new PandocInlayHints(output);
   const inlayMetadata = new InlayMetadataController(output);
   const cslStyles = new CslStyleController(output);
@@ -139,6 +143,9 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.commands.registerCommand(BUILD_HTML_COMMAND, async (uri: vscode.Uri | undefined) => {
     await markdownPreview.buildActiveMarkdownHtml(uri);
   }));
+  context.subscriptions.push(vscode.commands.registerCommand(OPEN_DOCX_PREVIEW_COMMAND,
+    /** Opens an independent saved-DOCX preview instead of changing the HTML preview engine. */
+    (uri: vscode.Uri | undefined) => docxPreview.open(uri)));
   context.subscriptions.push(vscode.commands.registerCommand("pandocManuscriptTools.mergeStyleExample",
     /** Applies the example to the CodeLens resource, including inactive editor groups. */
     async (uri: vscode.Uri | undefined) => {
@@ -260,6 +267,7 @@ export function activate(context: vscode.ExtensionContext) {
   }));
 
   context.subscriptions.push(vscode.workspace.onDidChangeTextDocument((event) => {
+    if (event.contentChanges.length) docxPreview.onChanged(event.document);
     if (isPandocDocument(event.document)) {
       index.updateDocument(event.document);
       inlayHints.scheduleRefresh(event.document);
@@ -278,6 +286,7 @@ export function activate(context: vscode.ExtensionContext) {
   }));
 
   context.subscriptions.push(vscode.workspace.onDidSaveTextDocument(async (document) => {
+    docxPreview.onSaved(document);
     if (isPandocDocument(document)) {
       index.updateDocument(document);
       inlayHints.scheduleRefresh(document, 0);

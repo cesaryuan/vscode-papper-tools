@@ -78,6 +78,7 @@ Use these commands from the Command Palette, or the corresponding buttons above 
 | Command | Result |
 | --- | --- |
 | **Papper Tools: Preview Markdown (Papper HTML)** | Open a side preview that includes unsaved changes and follows source navigation |
+| **Papper Tools: DOCX Paginated Preview (Experimental)** | Preview the current editor buffer with edit/save refresh, zoom and page navigation |
 | **Papper Tools: Build DOCX and Open in Word** | Save the source, build a fresh temporary DOCX, and open it in Word |
 | **Papper Tools: Open Settings** | Edit formatting and reference settings |
 | **Papper Tools: Set Citation Style** | Open the bibliography section with journal search and previews |
@@ -89,6 +90,12 @@ papper build docx
 ```
 
 HTML helps you check content while writing; inspect final pagination in Word. See [Papper's actual Word examples](https://github.com/cesaryuan/papper#output-examples) for manuscript and reviewer-reply output, including editable MathType equations.
+
+Experimental DOCX preview requires Papper with embedded PDF preview support.
+It uses a resident Papper service; no separate Docxide executable is required.
+The preview reads unsaved edits after a 700 ms pause, follows DOCX style settings, paints only nearby pages, and retains the physical page and relative position after refresh or zoom. Enabled MathType equations use the Rust backend in preview; native Word equations remain native when MathType is disabled. Preview cross-references use static numbers; ordinary Word exports retain their configured formula backend and native fields. Formula appearance and pagination can differ from Word.
+Edit/save refresh is enabled by default. For manual refresh only, disable both `pandocManuscriptTools.docxPreview.refreshOnEdit` and `pandocManuscriptTools.docxPreview.refreshOnSave`; adjust the pause with `docxPreview.editDelay`.
+HTML-style source synchronization is not available in this view. Pagination, directories and fields can differ from Word.
 
 ## More editing conveniences
 

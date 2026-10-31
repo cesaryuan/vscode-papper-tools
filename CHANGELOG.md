@@ -6,6 +6,7 @@ All notable changes to Papper Tools are documented in this file.
 
 ### Changed
 
+- Match the DOCX preview to the image preview's themed icon toolbar, with actual-size/fit-width actions, page and zoom boundary feedback, and pointer-anchored Ctrl+wheel zoom that keeps page images visible while redrawing.
 - Translate paragraph hovers using Papper's rendered cross-reference and citation text, including lists, tables and diff previews; share version-checked build results even when inlay hints are hidden.
 - Stream Papper installation and update command output into notification progress messages for manual and confirmed automatic updates, retaining full logs in the Papper Tools output channel.
 - Standardize English command names, CodeLens and hover actions with the `Papper Tools:` prefix, preserving command IDs and existing keybindings.
@@ -14,6 +15,8 @@ All notable changes to Papper Tools are documented in this file.
 - Organize Papper settings into themed cards and named groups with short titles, separate descriptions, visible inheritance badges and aligned controls; collapse field paths, complete YAML editors and legacy DOCX options, and adapt navigation and bibliography previews to narrow windows.
 
 ### Added
+
+- Add an independent experimental DOCX paginated preview using Papper's resident build/PDF service and bundled offline PDF.js, with debounced unsaved-buffer updates, manual/save refresh, bounded visible-page rendering, zoom, page navigation, position retention and preservation of the previous preview on failure. Embed Docxide in Papper instead of requiring its CLI, and use static cross-references in previews while preserving ordinary export settings.
 
 - Warn in Problems about figure/table labels without a cross reference in the current document, updating as references are edited.
 - Add **Open with Default Application** to the editor toolbar, file context menu and Command Palette, including binary/custom editor tabs and Unicode Windows paths.

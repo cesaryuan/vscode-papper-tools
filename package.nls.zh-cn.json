@@ -1,4 +1,8 @@
 {
+  "command.openDocxPreview": "Papper Tools: DOCX 分页预览（实验性）",
+  "configuration.docxPreview.refreshOnEdit": "停止输入后，使用当前编辑缓冲区刷新已打开的 DOCX 预览，不保存源文件。需要支持内置 PDF 预览的 Papper。",
+  "configuration.docxPreview.editDelay": "最后一次编辑后等待多少毫秒再刷新 DOCX 预览。构建串行执行，等待中的编辑会合并。",
+  "configuration.docxPreview.refreshOnSave": "保存 Markdown 源文件时立即刷新已打开的实验性 DOCX 预览。若只想手动刷新，还需关闭编辑后刷新。",
   "extension.description": "为 Pandoc Markdown 提供标签、交叉引用、公式悬停预览和文档大纲等本地辅助功能",
   "command.openSettings": "Papper Tools: 打开设置",
   "command.setCitationStyle": "Papper Tools: 设置参考文献样式",

@@ -34,6 +34,30 @@ Editor-to-preview synchronization follows viewport scrolling and settled mouse/k
 
 ## Rendering, translation, and tool installation
 
+The independent experimental DOCX preview lives in `src/docxPreview/`. Each panel
+owns a `papper __docx_preview_server` process and an authenticated ephemeral loopback
+endpoint. The service reuses the complete resident DOCX pipeline and calls the
+linked Docxide library to return PDF bytes; no Docxide CLI is installed or spawned.
+Edits invalidate old revisions immediately and debounce for 700 ms before queuing
+the latest unsaved buffer. Saves/manual refresh flush the debounce. Requests are
+serialized per source; pending edits coalesce and superseded results are discarded,
+including candidates still parsing/painting in PDF.js. Each delivered PDF uses a
+fresh private child directory. The last successful PDF remains available until its
+replacement is loaded and its retained anchor page has been painted. Panel closure
+aborts the owned process tree before removing generated files.
+
+The Webview bundles a pinned PDF.js viewer and matching module worker, CMaps, fonts,
+color profile and decoders for offline use. It reads page geometries upfront and
+keeps at most eight nearby page canvases, releasing offscreen bitmaps and cancelling
+obsolete renders. Zoom and page-relative position persist through the Webview state
+API. This bounds browser rasterization; Papper and Docxide still build and lay out
+the complete document. The service forces static cross-references for preview,
+retains SVG PNG fallbacks, and uses Rust outline WMF for enabled MathType equations
+before SDK checks and cache selection. Native-equation opt-outs remain effective;
+normal exports keep their configured formula backend and Word fields. HTTP build
+failures preserve the session; a crashed/timed-out service restarts on the next
+refresh. Stdin EOF also releases the server when its extension host disappears.
+
 The math hover uses MathJax's Node component loader to convert TeX into SVG and embeds the SVG as a hover image. Raw TeX is shown only as a fallback when rendering fails. Display math and inline math are rendered separately, and inline math is not treated as a cross-reference source. Paragraph-level inline math hovers are disabled by default because they produce larger hover cards. Paragraph translations may make network requests; the extension probes Google Translate on startup, falls back to Microsoft Translator if Google is unavailable, and shows the engine used for each translated hover.
 
 This local scan is deliberately approximate. Block openers outside the scan window, nested block comments, and embedded languages can need more context than the scan provides. Paragraphs cut off by the window are suppressed rather than partially translated. Language support follows the comment configuration exposed by installed extensions; languages without such configuration may not have comment translations. Markdown/MDX keep their existing paragraph translation hovers.

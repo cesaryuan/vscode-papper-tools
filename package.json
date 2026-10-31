@@ -26,14 +26,14 @@
   "scripts": {
     "sync:papper-config": "tsx scripts/sync-papper-configuration.ts",
     "test:configuration-contract": "tsx --test tests/configurationContract.test.ts",
-    "bundle": "tsx scripts/copy-mathjax-fonts.ts && esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --outfile=dist/extension.js --minify --legal-comments=none && esbuild src/imageDirectoryPreview/webview.ts --bundle --platform=browser --format=iife --target=es2022 --outfile=dist/image-directory-preview.js --minify --legal-comments=none",
-    "check:bundle": "node --check dist/extension.js && node --check dist/image-directory-preview.js",
+    "bundle": "tsx scripts/copy-mathjax-fonts.ts && tsx scripts/copy-pdfjs-assets.ts && esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --outfile=dist/extension.js --minify --legal-comments=none && esbuild src/imageDirectoryPreview/webview.ts --bundle --platform=browser --format=iife --target=es2022 --outfile=dist/image-directory-preview.js --minify --legal-comments=none && esbuild src/docxPreview/webview.mts --bundle --platform=browser --format=esm --target=es2022 --outfile=dist/docx-preview.mjs --minify --legal-comments=none",
+    "check:bundle": "node --check dist/extension.js && node --check dist/image-directory-preview.js && node --check dist/docx-preview.mjs && node --check dist/pdfjs/pdf.worker.mjs",
     "package:vsix": "npm run check && vsce package",
     "publish:marketplace": "npm run check && vsce publish",
     "publish:patch": "npm run check && vsce publish patch",
     "publish:minor": "npm run check && vsce publish minor",
     "profile:test-md": "tsx scripts/profile-test-md.ts test.md",
-    "test": "tsx --test tests/externalFileOpener.test.ts tests/parser.test.ts tests/configurationContract.test.ts tests/elementAttributes.test.ts tests/markdownYamlHeader.test.ts tests/manuscriptStyle.test.ts tests/styleConfiguration.test.ts tests/reviewerReplyDefinitions.test.ts tests/inlineFoldParser.test.ts tests/headingStructure.test.ts tests/mathHoverParser.test.ts tests/metafilePreviewAppearance.test.ts tests/metafileResourceCache.test.ts tests/customImagePreviewContext.test.ts tests/pathResolver.test.ts tests/imageDirectoryPreview.test.ts tests/paragraphTranslationDiff.test.ts tests/commentParagraph.test.ts tests/pandocNumbering.test.ts tests/inlayReferences.test.ts tests/inlaySettings.test.ts tests/cslStyles.test.ts tests/papperSettings.test.ts tests/papperToolPolicy.test.ts tests/papperUpdateProgress.test.ts tests/papperHtmlServer.test.ts tests/papperMarkdownScrollIntent.test.ts tests/papperMarkdownClickNavigation.test.ts tests/papperMarkdownScrollAnchors.test.ts tests/papperMarkdownMathRendering.test.ts tests/papperMarkdownLifecycle.test.ts tests/htmlResourceUris.test.ts tests/paragraphTranslator.test.ts tests/paragraphReferenceHover.test.ts tests/workspaceIndex.test.ts tests/asyncLruCache.test.ts tests/imagePreviewCache.test.ts tests/localization.test.ts",
+    "test": "tsx --test tests/docxPreview.test.ts tests/externalFileOpener.test.ts tests/parser.test.ts tests/configurationContract.test.ts tests/elementAttributes.test.ts tests/markdownYamlHeader.test.ts tests/manuscriptStyle.test.ts tests/styleConfiguration.test.ts tests/reviewerReplyDefinitions.test.ts tests/inlineFoldParser.test.ts tests/headingStructure.test.ts tests/mathHoverParser.test.ts tests/metafilePreviewAppearance.test.ts tests/metafileResourceCache.test.ts tests/customImagePreviewContext.test.ts tests/pathResolver.test.ts tests/imageDirectoryPreview.test.ts tests/paragraphTranslationDiff.test.ts tests/commentParagraph.test.ts tests/pandocNumbering.test.ts tests/inlayReferences.test.ts tests/inlaySettings.test.ts tests/cslStyles.test.ts tests/papperSettings.test.ts tests/papperToolPolicy.test.ts tests/papperUpdateProgress.test.ts tests/papperHtmlServer.test.ts tests/papperMarkdownScrollIntent.test.ts tests/papperMarkdownClickNavigation.test.ts tests/papperMarkdownScrollAnchors.test.ts tests/papperMarkdownMathRendering.test.ts tests/papperMarkdownLifecycle.test.ts tests/htmlResourceUris.test.ts tests/paragraphTranslator.test.ts tests/paragraphReferenceHover.test.ts tests/workspaceIndex.test.ts tests/asyncLruCache.test.ts tests/imagePreviewCache.test.ts tests/localization.test.ts",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test && npm run bundle && npm run check:bundle"
   },
@@ -42,6 +42,7 @@
     "onCommand:pandocManuscriptTools.rebuildIndex",
     "onCommand:pandocManuscriptTools.buildDocxAndOpen",
     "onCommand:pandocManuscriptTools.buildHtmlAndOpen",
+    "onCommand:pandocManuscriptTools.openDocxPreview",
     "onCommand:pandocManuscriptTools.openWithDefaultApplication",
     "onCommand:pandocManuscriptTools.installOrUpdatePapper",
     "onCommand:pandocManuscriptTools.openImagePreviewToSide",
@@ -55,6 +56,8 @@
     "LICENSE",
     "dist/extension.js",
     "dist/image-directory-preview.js",
+    "dist/docx-preview.mjs",
+    "dist/pdfjs/**",
     "assets/icon.png",
     "assets/style-project.yml",
     "assets/papper-configuration.json",
@@ -110,6 +113,11 @@
         "icon": "$(book)"
       },
       {
+        "command": "pandocManuscriptTools.openDocxPreview",
+        "title": "%command.openDocxPreview%",
+        "icon": "$(file-pdf)"
+      },
+      {
         "command": "pandocManuscriptTools.installOrUpdatePapper",
         "title": "%command.installOrUpdatePapper%"
       },
@@ -136,6 +144,11 @@
     ],
     "menus": {
       "editor/title": [
+        {
+          "command": "pandocManuscriptTools.openDocxPreview",
+          "when": "resourceLangId == markdown && resourceScheme == file",
+          "group": "navigation@15"
+        },
         {
           "command": "pandocManuscriptTools.openWithDefaultApplication",
           "when": "resourceScheme == file",
@@ -180,6 +193,10 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "pandocManuscriptTools.openDocxPreview",
+          "when": "resourceLangId == markdown && resourceScheme == file"
+        },
         {
           "command": "pandocManuscriptTools.openWithDefaultApplication",
           "when": "resourceScheme == file"
@@ -241,6 +258,26 @@
     "configuration": {
       "title": "Papper Tools",
       "properties": {
+        "pandocManuscriptTools.docxPreview.refreshOnEdit": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "%configuration.docxPreview.refreshOnEdit%"
+        },
+        "pandocManuscriptTools.docxPreview.editDelay": {
+          "type": "number",
+          "default": 700,
+          "minimum": 250,
+          "maximum": 5000,
+          "scope": "resource",
+          "description": "%configuration.docxPreview.editDelay%"
+        },
+        "pandocManuscriptTools.docxPreview.refreshOnSave": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "%configuration.docxPreview.refreshOnSave%"
+        },
         "pandocManuscriptTools.enableDiagnostics": {
           "type": "boolean",
           "default": true,
@@ -351,6 +388,7 @@
     "@types/vscode": "^1.90.0",
     "@vscode/vsce": "^3.9.1",
     "esbuild": "^0.28.0",
+    "pdfjs-dist": "6.4.299",
     "tsx": "^4.23.0",
     "typescript": "^7.0.1-rc"
   },

@@ -78,6 +78,7 @@ Papper 项目中的 `style.yml` 保存可复用的排版设置，稿件 YAML 头
 | 命令 | 作用 |
 | --- | --- |
 | **Papper Tools: Preview Markdown (Papper HTML)** | 在侧边预览当前稿件，包括尚未保存的修改，并跟随源码导航 |
+| **Papper Tools: DOCX 分页预览（实验性）** | 预览当前编辑内容，支持编辑/保存后刷新、缩放和页码跳转 |
 | **Papper Tools: Build DOCX and Open in Word** | 保存源文件、生成新的临时 DOCX，并在 Word 中打开 |
 | **Papper Tools: Open Settings** | 修改排版和引用配置 |
 | **Papper Tools: Set Citation Style** | 打开带期刊搜索与预览的参考文献设置 |
@@ -89,6 +90,11 @@ papper build docx
 ```
 
 HTML 方便写作时检查内容，最终分页请在 Word 中确认。[Papper 的真实 Word 示例](https://github.com/cesaryuan/papper/blob/main/README.zh-CN.md#实际输出)展示了主稿和审稿回复，也包含可编辑的 MathType 公式。
+
+实验性 DOCX 分页预览需要支持内置 PDF 预览的 Papper，通过常驻服务构建，不再需要单独安装 Docxide 可执行文件。
+停止输入 700 毫秒后，预览自动读取未保存的编辑内容，遵循 DOCX 样式设置，只绘制可见页附近的页面，刷新与缩放后保留页码和页内位置。启用 MathType 时，预览内部使用 Rust 轮廓 WMF；关闭 MathType 时保留原生 Word 公式。预览使用静态交叉引用，正式导出仍遵循配置的公式后端和原生 Word 字段设置。公式外观和分页可能与 Word 不同。
+保存源文件默认会刷新；将 `pandocManuscriptTools.docxPreview.refreshOnSave` 设为 `false` 可改为仅手动刷新。
+可通过 `docxPreview.refreshOnEdit`、`docxPreview.editDelay` 和 `docxPreview.refreshOnSave` 调整刷新行为。暂不提供 HTML 预览的双向源码导航，Docxide 的分页、目录和字段可能与 Word 不同。
 
 ## 其他编辑辅助
 

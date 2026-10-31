@@ -1,4 +1,8 @@
 {
+  "command.openDocxPreview": "Papper Tools: DOCX Paginated Preview (Experimental)",
+  "configuration.docxPreview.refreshOnEdit": "Refresh an open DOCX preview after editing pauses, using the current buffer without saving. Requires Papper with embedded PDF preview support.",
+  "configuration.docxPreview.editDelay": "Milliseconds to wait after the last edit before refreshing DOCX preview. Builds run serially and pending edits are combined.",
+  "configuration.docxPreview.refreshOnSave": "Refresh an open experimental DOCX preview immediately when its Markdown source is saved. To refresh manually only, also disable refresh on edit.",
   "extension.description": "Local VS Code helpers for Pandoc Markdown labels, cross references, math hovers, and outline symbols.",
   "command.openSettings": "Papper Tools: Open Settings",
   "command.setCitationStyle": "Papper Tools: Set Citation Style",
