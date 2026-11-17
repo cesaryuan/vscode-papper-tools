@@ -1,12 +1,13 @@
 import { htmlMessage, getLanguage, getWebviewLocalization, serializeLocalization } from "../localization";
 import { escapeXml } from "./svg";
+import { BUTTON_HELP } from "./help";
 
 /** Creates the editor shell; the bundled browser controller owns all figure interactions. */
 export function buildSubfigureHtml(script: string, csp: string, icons = ""): string {
   const toolbarIcons: Record<string, string> = { save: "save", saveAs: "save-as", undo: "discard", redo: "redo",
     addImages: "file-media", addText: "text-size", arrange: "layout", renumber: "list-ordered", refresh: "refresh", export: "export" };
   /** Creates a translated toolbar button without mixing manuscript content into HTML. */
-  const button = (action: string, label: string): string => `<button data-action="${action}">${toolbarIcons[action] ? `<span class="codicon codicon-${toolbarIcons[action]}" aria-hidden="true"></span>` : ""}<span>${htmlMessage(label)}</span></button>`;
+  const button = (action: string, label: string): string => `<button data-action="${action}" title="${htmlMessage(BUTTON_HELP[action] ?? label)}">${toolbarIcons[action] ? `<span class="codicon codicon-${toolbarIcons[action]}" aria-hidden="true"></span>` : ""}<span>${htmlMessage(label)}</span></button>`;
   return `<!doctype html><html lang="${escapeXml(getLanguage())}"><head><meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob:; style-src ${escapeXml(csp)} 'unsafe-inline'; script-src ${escapeXml(csp)}; font-src ${escapeXml(csp)} data:;">
   <meta name="viewport" content="width=device-width,initial-scale=1"><title>${htmlMessage("Combination Figure Editor")}</title>
@@ -27,6 +28,14 @@ export function buildSubfigureHtml(script: string, csp: string, icons = ""): str
   #viewport{overflow:auto;position:relative;background-color:var(--vscode-editorGroupHeader-tabsBackground,#171717);padding:28px;touch-action:none}
   #board{display:block;overflow:visible;box-shadow:0 4px 22px #0005;user-select:none}#board [data-element-id]{cursor:move}#board .resize{cursor:nwse-resize;fill:#fff;stroke:#007acc;vector-effect:non-scaling-stroke}
   .selection{fill:none;stroke:#007acc;stroke-width:1;vector-effect:non-scaling-stroke;pointer-events:none}
+  #board .divider{cursor:col-resize;fill:transparent;stroke:none}#board .divider-line{stroke:#888;stroke-width:1;stroke-dasharray:4 4;pointer-events:none;vector-effect:non-scaling-stroke}
+  #board .drag-ghost{opacity:.75;pointer-events:none}#board.dragging{cursor:grabbing}#board.dragging [data-element-id]{cursor:grabbing}
+  #board .snap-guide{pointer-events:none}#board .snap-guide line{stroke:var(--vscode-focusBorder,#007acc);stroke-width:1;stroke-dasharray:3 3;vector-effect:non-scaling-stroke}
+  #board .snap-guide text{fill:var(--vscode-focusBorder,#007acc);font:9px var(--vscode-font-family,system-ui);paint-order:stroke;stroke:white;stroke-width:3;stroke-linejoin:round}
+  .dock-preview{fill:#007acc33;stroke:#007acc;stroke-width:2;stroke-dasharray:6 3;pointer-events:none;vector-effect:non-scaling-stroke}
+  #drop-hint{position:absolute;top:10px;left:16px;right:16px;padding:7px 10px;z-index:4;pointer-events:none;background:var(--vscode-editorHoverWidget-background,#252526);border:1px solid var(--vscode-focusBorder,#007acc)}
+  #drop-hint:empty{display:none}.presets{display:flex;gap:4px;flex-wrap:wrap;margin:10px 0}.presets button{padding:6px 7px}
+  .layout-help{margin:8px 0 14px}details>summary{cursor:pointer;font-size:12px;margin:14px 0 10px}input:disabled{opacity:.6}
   .item{display:flex;align-items:center;gap:6px;max-width:100%;width:100%;margin-bottom:5px;text-align:left;background:transparent;border:1px solid transparent;padding:7px 6px}
   .item.selected{background:var(--vscode-list-activeSelectionBackground,#094771);color:var(--vscode-list-activeSelectionForeground,#fff)}.item .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}.badge{font-size:11px;opacity:.7}
   .tools{display:flex;flex-wrap:wrap;gap:4px}.tools button{font-size:12px;padding:4px 7px}.rich{min-height:78px;max-height:220px;overflow:auto;border:1px solid var(--vscode-input-border,#555);background:var(--vscode-input-background,#333);padding:7px;white-space:pre-wrap;line-height:1.5;user-select:text}
@@ -39,12 +48,15 @@ export function buildSubfigureHtml(script: string, csp: string, icons = ""): str
   ${button("save", "Save")}${button("saveAs", "Save As")}${button("undo", "Undo")}${button("redo", "Redo")}<span class="separator"></span>
   ${button("addImages", "Add images")}${button("addText", "Add text")}${button("arrange", "Auto arrange")}${button("renumber", "Renumber")}<span class="separator"></span>
   ${button("refresh", "Refresh images")}<input id="dpi" type="number" value="300" min="1" max="2400" style="width:65px" aria-label="${htmlMessage("PNG resolution (DPI)")}"><span>DPI</span>${button("export", "Export PNG")}</header>
-  <main><aside><h2>${htmlMessage("Elements")}</h2><div id="elements"></div><p class="muted">${htmlMessage("Drag to reorder. Shift-click to select multiple elements.")}</p>
-  <h3>${htmlMessage("Arrange selection")}</h3><div class="tools">
+  <main><aside><h2>${htmlMessage("Layout")}</h2><select id="layout-mode" aria-label="${htmlMessage("Layout mode")}"><option value="rows">${htmlMessage("Panel rows")}</option><option value="free">${htmlMessage("Free positioning")}</option></select>
+  <p id="layout-help" class="muted layout-help"></p><div class="presets" aria-label="${htmlMessage("Layout presets")}">
+  ${button("preset:1", "1 per row")}${button("preset:2", "2 per row")}${button("preset:3", "3 per row")}${button("preset:1,2", "1 + 2")}${button("preset:2,1", "2 + 1")}</div>
+  <h2>${htmlMessage("Elements")}</h2><div id="elements"></div><p class="muted">${htmlMessage("Drag to reorder. Shift-click to select multiple elements.")}</p>
+  <h3>${htmlMessage("Align and distribute")}</h3><p class="muted">${htmlMessage("For multiple selected elements in free positioning mode.")}</p><div class="tools">
   ${button("align:left", "Left")}${button("align:center", "Center")}${button("align:right", "Right")}${button("align:top", "Top")}${button("align:middle", "Middle")}${button("align:bottom", "Bottom")}
   ${button("align:horizontal", "Horizontal spacing")}${button("align:vertical", "Vertical spacing")}</div>
   <div class="tools" style="margin-top:12px">${button("duplicate", "Duplicate")}${button("delete", "Delete")}</div></aside>
-  <section id="viewport" aria-label="${htmlMessage("Figure canvas")}"><svg id="board" xmlns="http://www.w3.org/2000/svg" tabindex="0"></svg></section>
+  <section id="viewport" aria-label="${htmlMessage("Figure canvas")}"><div id="drop-hint" role="status"></div><svg id="board" xmlns="http://www.w3.org/2000/svg" tabindex="0"></svg></section>
   <aside><h2>${htmlMessage("Figure size")}</h2>
   <div class="pair"><label class="field"><span>${htmlMessage("Width")}</span><input id="figure-width" type="number" min="1" step="1"></label><label class="field"><span>${htmlMessage("Unit")}</span><select id="unit"><option>mm</option><option>in</option></select></label></div>
   <label class="field"><span>${htmlMessage("Height")}</span><input id="figure-height" type="number" min="1" step="1"></label>
@@ -55,12 +67,13 @@ export function buildSubfigureHtml(script: string, csp: string, icons = ""): str
   <label class="check"><input id="transparent" type="checkbox">${htmlMessage("Transparent background")}</label>
   <label class="check"><input id="embedded" type="checkbox">${htmlMessage("Embed image assets")}</label>
   <hr><div id="inspector"></div><hr>
-  <h3>${htmlMessage("Automatic layout")}</h3><div class="pair"><label class="field"><span>${htmlMessage("Columns")}</span><input id="columns" type="number" min="1" max="30"></label>
+  <details><summary>${htmlMessage("Advanced grid settings")}</summary><p class="muted">${htmlMessage("Default panels per row is used when the custom row list is empty. Presets and drag docking update the row list automatically.")}</p>
+  <div class="pair"><label class="field"><span>${htmlMessage("Default panels per row")}</span><input id="columns" type="number" min="1" max="30"></label>
   <label class="field"><span>${htmlMessage("Gap (pt)")}</span><input id="gap" type="number" min="0"></label></div>
-  <label class="field"><span>${htmlMessage("Panels per row")}</span><input id="rows" placeholder="2, 3, 2"></label>
+  <label class="field"><span>${htmlMessage("Custom row counts")}</span><input id="rows" placeholder="2, 3, 2"></label>
   <label class="field"><span>${htmlMessage("Width weights")}</span><input id="weights" placeholder="1, 2, 1"></label>
   <div class="pair"><label class="field"><span>${htmlMessage("Row gap (pt)")}</span><input id="row-gap" type="number" min="0"></label>
-  <label class="field"><span>${htmlMessage("Padding (pt)")}</span><input id="padding" type="number" min="0"></label></div>
+  <label class="field"><span>${htmlMessage("Padding (pt)")}</span><input id="padding" type="number" min="0"></label></div></details>
   <h3>${htmlMessage("Default text")}</h3><label class="field"><span>${htmlMessage("Font family")}</span><input id="default-family" list="fonts"></label>
   <label class="field"><span>${htmlMessage("Font size (pt)")}</span><input id="default-size" type="number" min="1" step=".5"></label>
   ${button("applyFont", "Apply default text to all")}
@@ -68,7 +81,7 @@ export function buildSubfigureHtml(script: string, csp: string, icons = ""): str
   </aside></main><div id="notice" role="status"></div>
   <footer><span id="status">${htmlMessage("Loading combination figure…")}</span><div class="controls">
   <label class="check"><input id="snap" type="checkbox" checked>${htmlMessage("Snap")}</label>
-  <span class="muted">${htmlMessage("Ctrl + wheel to zoom")}</span><button data-action="fit">${htmlMessage("Fit")}</button><input id="zoom" type="number" value="100" min="10" max="500" aria-label="${htmlMessage("Zoom percent")}"><span>%</span></div></footer>
+  <span class="muted">${htmlMessage("Ctrl + wheel to zoom")}</span>${button("fit", "Fit")}<input id="zoom" type="number" value="100" min="10" max="500" aria-label="${htmlMessage("Zoom percent")}"><span>%</span></div></footer>
   <script id="localization" type="application/json">${getWebviewLocalization()}</script>
   <script id="editor-options" type="application/json">${serializeLocalization({})}</script><script defer src="${escapeXml(script)}"></script>
   </body></html>`;

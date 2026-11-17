@@ -28,6 +28,8 @@ export class FigureEditorDocument implements vscode.CustomDocument {
   saved: FigureDocument;
   sources: Awaited<ReturnType<typeof figureAssets>> | undefined;
   diskSource: string | undefined;
+  undoDepth = 0;
+  redoDepth = 0;
   private sourceKey = "";
   /** Keeps absolute source paths in the editing session and rebases them only when writing SVG. */
   constructor(readonly uri: vscode.Uri, public figure: FigureDocument, public directory: string, public manuscript?: ManuscriptTarget) {
@@ -159,20 +161,25 @@ export class SubfigureEditorController implements vscode.CustomEditorProvider<Fi
   }
 
   /** Applies one user gesture as one native undo step, rather than logging every pointer movement. */
-  private change(document: FigureEditorDocument, figure: FigureDocument, label: string): void {
+  private change(document: FigureEditorDocument, figure: FigureDocument, label: string, initial = false): void {
     validateFigure(figure);
     const before = structuredClone(document.figure), after = structuredClone(figure);
+    // Acknowledge an optimistic client revision even when this edit has no visible effect.
+    if (!initial && JSON.stringify(before) === JSON.stringify(after)) { document.revision++; return; }
     document.figure = after; document.revision++;
+    if (!initial) { document.undoDepth++; document.redoDepth = 0; }
     /** Replays a history snapshot and refreshes every view of the document. */
     const restore = async (value: FigureDocument): Promise<void> => { document.figure = structuredClone(value); document.revision++; await this.sendState(document); };
-    this.changes.fire({ document, label, undo: () => restore(before), redo: () => restore(after) });
+    this.changes.fire({ document, label,
+      undo: async () => { if (!initial) { document.undoDepth--; document.redoDepth++; } await restore(before); },
+      redo: async () => { if (!initial) { document.undoDepth++; document.redoDepth--; } await restore(after); } });
   }
 
   /** Sends complete layout state with cached, full-quality images after a committed operation. */
   private async sendState(document: FigureEditorDocument): Promise<void> {
     const assets = await document.assets();
     await Promise.all([...document.panels].map((panel) => panel.webview.postMessage({ type: "state", figure: document.figure,
-      revision: document.revision, ...assets })));
+      revision: document.revision, canUndo: document.undoDepth > 0, canRedo: document.redoDepth > 0, ...assets })));
   }
 
   /** Adds local or dropped embedded images while preserving an already edited layout. */
@@ -184,7 +191,7 @@ export class SubfigureEditorController implements vscode.CustomEditorProvider<Fi
       if (!initial) { panel.x = 12 + figure.elements.length * 4; panel.y = 12 + figure.elements.length * 4; }
       figure.elements.push(panel);
     }
-    if (initial) arrangePanels(figure);
+    if (initial || figure.layout.mode === "rows") arrangePanels(figure);
     const result = figure.embedded ? await setEmbedded(figure, true) : figure;
     this.change(document, result, t("Add images"));
     await this.sendState(document);
@@ -194,7 +201,7 @@ export class SubfigureEditorController implements vscode.CustomEditorProvider<Fi
   private async handleMessage(document: FigureEditorDocument, panel: vscode.WebviewPanel, message: EditorMessage): Promise<void> {
     if (message.type === "ready") {
       // An untouched untitled draft must still prompt for saving when it is closed.
-      if (document.uri.scheme === "untitled" && document.revision === 0) this.change(document, document.figure, t("Create combination figure"));
+      if (document.uri.scheme === "untitled" && document.revision === 0) this.change(document, document.figure, t("Create combination figure"), true);
       await this.sendState(document);
     } else if (message.type === "change") {
       if (message.revision !== document.revision) { await this.sendState(document); return; }
@@ -205,7 +212,11 @@ export class SubfigureEditorController implements vscode.CustomEditorProvider<Fi
       if (document.figure.autoHeight && Number.isFinite(message.height) && message.height > 0) document.figure.height = message.height;
     } else if (message.type === "save") await vscode.commands.executeCommand("workbench.action.files.save");
     else if (message.type === "saveAs") await vscode.commands.executeCommand("workbench.action.files.saveAs");
-    else if (message.type === "undo" || message.type === "redo") await vscode.commands.executeCommand(message.type);
+    else if (message.type === "undo" || message.type === "redo") {
+      // Toolbar focus can leave a different editor as the command target; keep VS Code's native stack.
+      if (!panel.active) panel.reveal(panel.viewColumn);
+      await vscode.commands.executeCommand(message.type);
+    }
     else if (message.type === "refresh") { document.sources = undefined; await this.sendState(document); }
     else if (message.type === "embed") {
       this.change(document, await setEmbedded(document.figure, message.enabled), t("Change image storage"));

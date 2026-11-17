@@ -1,0 +1,40 @@
+/** Shared toolbar descriptions translated by the host or the browser at render time. */
+export const BUTTON_HELP: Record<string, string> = {
+  save: "Save the editable SVG and apply any pending manuscript conversion (Ctrl+S).",
+  saveAs: "Save a copy to another SVG path and update its relative image links.",
+  undo: "Undo the last figure edit (Ctrl+Z).",
+  redo: "Restore the last undone figure edit (Ctrl+Y or Ctrl+Shift+Z).",
+  addImages: "Add image files as intact panels with attached labels and captions.",
+  addText: "Add an independent text box for a shared row or column title.",
+  arrange: "Arrange panels using the grid settings in Free positioning. Unavailable in Panel rows, which updates automatically.",
+  renumber: "Assign a, b, c… in visual order. Moving a panel otherwise keeps its label.",
+  refresh: "Reload linked source images without changing their placement.",
+  export: "Export the figure at the selected DPI. The paper reference and editor controls are excluded.",
+  "align:left": "Align the left edges of the selected elements.",
+  "align:center": "Align the horizontal centres of the selected elements.",
+  "align:right": "Align the right edges of the selected elements.",
+  "align:top": "Align the top edges of the selected elements.",
+  "align:middle": "Align the vertical centres of the selected elements, including their captions.",
+  "align:bottom": "Align the bottom edges of the selected elements, including their captions.",
+  "align:horizontal": "Keep the outer selected elements fixed and distribute the horizontal gaps evenly.",
+  "align:vertical": "Keep the outer selected elements fixed and distribute the vertical gaps evenly.",
+  duplicate: "Copy the selected panels or text boxes.",
+  delete: "Remove the selected elements from this figure. Source image files are kept.",
+  applyFont: "Apply the default font, size, colour and alignment to every panel caption and text box.",
+  fit: "Fit the A4 reference or figure into the viewport without changing the saved size.",
+  openSource: "Open the original linked image in its normal editor.",
+  "preset:1": "Arrange one full-width panel in each row.",
+  "preset:2": "Arrange two panels per row with equal image heights.",
+  "preset:3": "Arrange three panels per row with equal image heights.",
+  "preset:1,2": "Start with one full-width panel, then two equal-height images per row.",
+  "preset:2,1": "Start with two equal-height images, then one full-width panel per row.",
+};
+
+/** Rich-text button descriptions use formatting names rather than their abbreviated glyphs. */
+export const FORMAT_HELP: Record<string, string> = {
+  bold: "Apply or remove bold formatting from the selected text.",
+  italic: "Apply or remove italic formatting from the selected text.",
+  superscript: "Format the selected text as superscript.",
+  subscript: "Format the selected text as subscript.",
+  removeFormat: "Clear inline formatting from the selected text.",
+};

@@ -19,7 +19,7 @@ export type FigureElement = Panel | SharedText;
 export type FigureDocument = {
   format: "papper-subfigure"; version: 1; width: number; height: number; autoHeight: boolean; embedded: boolean;
   background: "white" | "transparent"; font: TextStyle;
-  layout: { columns: number; rows: number[]; weights: number[]; gap: number; rowGap: number; padding: number };
+  layout: { mode?: "rows" | "free"; columns: number; rows: number[]; weights: number[]; gap: number; rowGap: number; padding: number };
   elements: FigureElement[];
 };
 export type MeasureText = (run: RichRun, style: TextStyle) => number;
@@ -28,7 +28,7 @@ export type MeasureText = (run: RichRun, style: TextStyle) => number;
 export function createFigure(): FigureDocument {
   return { format: "papper-subfigure", version: 1, width: 160 * PT_PER_MM, height: 85 * PT_PER_MM,
     autoHeight: true, embedded: false, background: "white", font: { family: "Times New Roman", size: 10, color: "#000000", align: "center" },
-    layout: { columns: 2, rows: [], weights: [], gap: 10, rowGap: 16, padding: 8 }, elements: [] };
+    layout: { mode: "rows", columns: 2, rows: [], weights: [], gap: 10, rowGap: 16, padding: 8 }, elements: [] };
 }
 
 /** Generates stable element identities without encoding the current visual order. */
@@ -124,7 +124,8 @@ export function arrangePanels(figure: FigureDocument, measure: MeasureText = est
   while (index < panels.length) {
     const count = Math.max(1, Math.min(panels.length - index, rows[rowIndex] || columns));
     const row = panels.slice(index, index + count);
-    const factors = row.map((_, offset) => Math.max(.05, weights[index + offset] || 1));
+    // Unspecified shares follow the cropped aspect ratio, giving actual images equal heights.
+    const factors = row.map((panel, offset) => weights[index + offset] || visibleRatio(panel));
     const available = Math.max(count, figure.width - 2 * padding - gap * (count - 1));
     const total = factors.reduce((a, b) => a + b, 0);
     const rowHeight = Math.max(...row.map((panel, offset) => available * factors[offset] / total / visibleRatio(panel)));
@@ -195,6 +196,7 @@ export function validateFigure(value: unknown): asserts value is FigureDocument 
   const positive = (number: number): boolean => Number.isFinite(number) && number > 0;
   if (!positive(figure.width) || !positive(figure.height)) throw new Error("Figure dimensions must be positive");
   if (!positive(figure.font?.size) || !Number.isInteger(figure.layout?.columns) || figure.layout.columns < 1
+    || figure.layout.mode !== undefined && !["rows", "free"].includes(figure.layout.mode)
     || figure.layout.rows.some((number) => !Number.isInteger(number) || number < 1)
     || figure.layout.weights.some((number) => !positive(number))
     || [figure.layout.gap, figure.layout.rowGap, figure.layout.padding].some((number) => !Number.isFinite(number) || number < 0)) throw new Error("Invalid layout settings");

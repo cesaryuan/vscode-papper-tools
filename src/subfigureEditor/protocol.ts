@@ -1,7 +1,7 @@
 import type { FigureDocument } from "./model";
 
 export type HostMessage =
-  | { type: "state"; figure: FigureDocument; sources: Record<string, string>; revision: number; failures: string[] }
+  | { type: "state"; figure: FigureDocument; sources: Record<string, string>; revision: number; failures: string[]; canUndo?: boolean; canRedo?: boolean }
   | { type: "export"; sources: Record<string, string>; dpi: number }
   | { type: "error"; message: string };
 export type EditorMessage =

@@ -6,6 +6,9 @@ All notable changes to Papper Tools are documented in this file.
 
 ### Changed
 
+- Snap combination-figure width dividers to common canvas fractions, equal adjacent widths or image heights, and other rows' dividers. Show temporary alignment guides for divider resizing and free movement, including selection edges and centres, with zoom-independent tolerance and Alt bypass.
+- Smooth combination-figure dragging by retaining image nodes and updating once per animation frame; show a continuous translucent panel copy while docking. Use gray dashed width dividers, disable Auto arrange in Panel rows, and default row widths to equal cropped-image heights while preserving manual proportions.
+- Make combination-figure layout visual: drag panels beside one another or above/below rows with live previews, resize adjacent widths with dividers, use quick row presets, and retain a separate free-positioning mode. Clarify grid counts and alignment controls, add descriptions to every editor button, and keep toolbar history focused on the active figure with availability feedback.
 - Fix conversion of bare child-figure citations (including parenthesized citations), add pointer-anchored Ctrl+wheel canvas zoom, an edit-layout hover action on supported subfigure groups and their local references, and official VS Code Codicons on the combination-editor toolbar.
 - Match the DOCX preview to the image preview's themed icon toolbar, with actual-size/fit-width actions, page and zoom boundary feedback, and pointer-anchored Ctrl+wheel zoom that keeps page images visible while redrawing.
 - Translate paragraph hovers using Papper's rendered cross-reference and citation text, including lists, tables and diff previews; share version-checked build results even when inlay hints are hidden.

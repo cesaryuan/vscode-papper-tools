@@ -5,13 +5,14 @@ import { mkdtemp, writeFile, mkdir, rm } from "node:fs/promises";
 import * as path from "node:path";
 import { tmpdir } from "node:os";
 import { DOMParser, type Element } from "@xmldom/xmldom";
-import { createFigure, createPanel, arrangePanels, resizeFigure, reflowFigure, renumberPanels, validateFigure, type Panel } from "../src/subfigureEditor/model";
+import { createFigure, createPanel, arrangePanels, resizeFigure, reflowFigure, renumberPanels, validateFigure, visibleRatio, type Panel } from "../src/subfigureEditor/model";
 import { serializeFigure } from "../src/subfigureEditor/svg";
 import { parseFigureSvg } from "../src/subfigureEditor/document";
 import { importMarkdownGroup, conversionEdits } from "../src/subfigureEditor/markdown";
 import { hydrateFigure, portableFigure, assetDataUri, setEmbedded } from "../src/subfigureEditor/assets";
 import { setPngDpi } from "../src/subfigureEditor/png";
 import { SourceModuleFixture } from "./helpers/sourceModule";
+import { dockPanels, findDockTarget, panelRows, resizeRowPair, snapRowDivider, snapSelection } from "../src/subfigureEditor/layout";
 
 /** Applies independent source edits using their original UTF-16 offsets. */
 function apply(text: string, edits: Array<{ start: number; end: number; text: string }>): string {
@@ -198,4 +199,141 @@ test("invalid cropping is rejected before a saved figure can be replaced", () =>
   const figure = sample(), panel = figure.elements[0] as Panel;
   panel.crop.left = 80; panel.crop.right = 30;
   assert.throws(() => validateFigure(figure), /crop/);
+});
+
+test("side docking joins equal-height images and dropping below a row creates a full-width row", () => {
+  const figure = sample();
+  const panels = figure.elements.filter((element): element is Panel => element.kind === "panel");
+  const labels = new Map(panels.map((panel) => [panel.id, panel.label]));
+  const moving = panels[4], target = panels[0];
+  dockPanels(figure, new Set([moving.id]), { kind: "beside", anchor: target.id, side: "after" });
+  const firstRow = panelRows(figure)[0];
+  assert.deepEqual(firstRow.map((panel) => panel.id), [target.id, moving.id, panels[1].id]);
+  for (const panel of firstRow) assert(Math.abs(panel.width / visibleRatio(panel) - firstRow[0].height) < .001);
+  const drop = findDockTarget(figure, new Set([moving.id]), figure.width / 2,
+    Math.max(...firstRow.map((panel) => panel.y + panel.height + (panel.lines?.length ?? 0) * panel.style.size * 1.25 + panel.gap)) + 1);
+  assert.equal(drop.kind, "row");
+  assert.equal(drop.side, "after");
+  dockPanels(figure, new Set([moving.id]), drop);
+  const rows = panelRows(figure);
+  assert.deepEqual(rows.map((row) => row.length), [2, 1, 2]);
+  assert.equal(rows[1][0].id, moving.id);
+  assert.equal(rows[1][0].width, figure.width - 2 * figure.layout.padding);
+  assert.equal(new Set(rows.flat().map((panel) => panel.id)).size, 5);
+  assert(rows.flat().every((panel) => panel.label === labels.get(panel.id)));
+  const reopened = parseFigureSvg(serializeFigure(figure));
+  assert.deepEqual(panelRows(reopened).map((row) => row.map((panel) => panel.id)), rows.map((row) => row.map((panel) => panel.id)));
+});
+
+test("default row widths give cropped images equal heights and manual divider proportions survive reopening", () => {
+  const figure = sample(), panels = panelRows(figure).flat();
+  figure.layout.weights = [];
+  panels[0].crop = { left: 10, right: 20, top: 5, bottom: 5 };
+  arrangePanels(figure);
+  for (const row of panelRows(figure)) {
+    for (const panel of row) assert(Math.abs(panel.width / visibleRatio(panel) - row[0].height) < .001);
+    assert(Math.abs(row.reduce((sum, panel) => sum + panel.width, 0) + figure.layout.gap * (row.length - 1)
+      + 2 * figure.layout.padding - figure.width) < .001);
+  }
+  const [left, right] = panelRows(figure)[0], width = left.width, combined = left.width + right.width;
+  resizeRowPair(figure, left.id, right.id, 17);
+  assert(Math.abs(left.width - width - 17) < .001);
+  assert(Math.abs(left.width + right.width - combined) < .001);
+  const savedWidths = panelRows(figure).flat().map((panel) => panel.width);
+  const reopened = parseFigureSvg(serializeFigure(figure));
+  arrangePanels(reopened);
+  panelRows(reopened).flat().forEach((panel, index) => assert(Math.abs(panel.width - savedWidths[index]) < .001));
+});
+
+test("row divider changes adjacent proportions without changing other rows or losing edited panel content", () => {
+  const figure = sample(), rows = panelRows(figure);
+  const left = rows[0][0], right = rows[0][1], originalWidth = left.width, total = left.width + right.width;
+  const otherWidths = rows[1].map((panel) => panel.width), caption = structuredClone(left.caption);
+  left.crop.right = 15;
+  resizeRowPair(figure, left.id, right.id, originalWidth * .3);
+  assert(Math.abs(left.width - originalWidth * 1.3) < .001);
+  assert(Math.abs(left.width + right.width - total) < .001);
+  assert.deepEqual(panelRows(figure)[1].map((panel) => panel.width), otherWidths);
+  assert.deepEqual(left.caption, caption);
+  assert.equal(left.crop.right, 15);
+  resizeRowPair(figure, left.id, right.id, total * 100);
+  assert(right.width > 0);
+  validateFigure(figure);
+});
+
+test("divider snapping lands on canvas fractions, holds through small jitter and releases outside the capture zone", () => {
+  const figure = createFigure();
+  figure.width = 400; figure.layout.padding = 10; figure.layout.weights = [1, 2, 1, 3];
+  figure.elements = [2, 1, 1, 1].map((ratio) => createPanel(figure, "panel.svg", "Panel", ratio));
+  arrangePanels(figure);
+  const [[left, right], other] = panelRows(figure), origin = (left.x + left.width + right.x) / 2;
+  const otherWidths = other.map((panel) => panel.width);
+  for (const target of [100, 400 / 3, 200, 800 / 3, 300]) {
+    const result = snapRowDivider(figure, left.id, right.id, target + 2 - origin, 4);
+    assert(Math.abs(result.snap.x - target) < .001);
+  }
+  const captured = snapRowDivider(figure, left.id, right.id, 202 - origin, 4);
+  const held = snapRowDivider(figure, left.id, right.id, 205 - origin, 4, captured.snap.x);
+  assert.equal(held.snap.x, 200);
+  const released = snapRowDivider(figure, left.id, right.id, 207 - origin, 4, captured.snap.x);
+  assert.equal(released.snap, undefined);
+  assert.equal(released.delta, 207 - origin);
+  resizeRowPair(figure, left.id, right.id, captured.delta);
+  assert(Math.abs((left.x + left.width + right.x) / 2 - 200) < .001);
+  assert.deepEqual(other.map((panel) => panel.width), otherWidths);
+  assert.equal(snapRowDivider(figure, left.id, right.id, 2, 0).snap, undefined);
+});
+
+test("divider snapping restores cropped-image equal heights, aligns other rows and skips unreachable guides", () => {
+  const figure = createFigure();
+  figure.width = 400; figure.layout.padding = 10; figure.layout.weights = [1, 2, 1, 3];
+  figure.elements = [2, 1, 1, 1].map((ratio) => createPanel(figure, "panel.svg", "Panel", ratio));
+  arrangePanels(figure);
+  const [[left, right], other] = panelRows(figure), origin = (left.x + left.width + right.x) / 2;
+  left.crop.right = 25;
+  const equalHeight = snapRowDivider(figure, left.id, right.id, 238 - origin, 2);
+  assert.equal(equalHeight.snap.kind, "equal-height");
+  const otherDivider = (other[0].x + other[0].width + other[1].x) / 2;
+  const aligned = snapRowDivider(figure, left.id, right.id, otherDivider + 1 - origin, 2);
+  assert.equal(aligned.snap.kind, "aligned");
+  resizeRowPair(figure, left.id, right.id, equalHeight.delta);
+  assert(Math.abs(left.width / 1.5 - right.width) < .001);
+  figure.layout.columns = 3; figure.layout.rows = []; figure.layout.weights = [2, 3, 5, 1]; arrangePanels(figure);
+  const [a, b] = panelRows(figure)[0], pairOrigin = (a.x + a.width + b.x) / 2;
+  const equalWidth = snapRowDivider(figure, a.id, b.id, 106 - pairOrigin, 2);
+  assert.equal(equalWidth.snap.kind, "equal-width");
+  resizeRowPair(figure, a.id, b.id, equalWidth.delta);
+  assert(Math.abs(a.width - b.width) < .001);
+  const unreachable = snapRowDivider(figure, a.id, b.id, 200 - 105, 2);
+  assert.equal(unreachable.snap, undefined);
+  resizeRowPair(figure, a.id, b.id, unreachable.delta);
+  assert(b.width >= 12 - .001);
+});
+
+test("free movement aligns a selection as a group and reports guides for the captured canvas or element coordinates", () => {
+  const figure = createFigure();
+  figure.width = 400; figure.height = 400; figure.autoHeight = false;
+  const a = createPanel(figure, "a.svg", "A"), b = createPanel(figure, "b.svg", "B"), target = createPanel(figure, "c.svg", "Target");
+  Object.assign(a, { x: 20, y: 30, width: 60, height: 40, labelPosition: "none" });
+  Object.assign(b, { x: 100, y: 30, width: 40, height: 40, labelPosition: "none" });
+  Object.assign(target, { x: 240, y: 180, width: 80, height: 60, labelPosition: "none" });
+  figure.elements = [a, b, target];
+  reflowFigure(figure);
+  const group = new Set([a.id, b.id]), result = snapSelection(figure, group, 121, 151, 4);
+  assert.equal(result.dx, 120); assert.equal(result.dy, 150);
+  assert.deepEqual(result.guides.map((guide) => [guide.axis, guide.position, guide.kind]),
+    [["x", 200, "canvas-center"], ["y", 200, "canvas-center"]]);
+  const held = snapSelection(figure, group, 125, 155, 4, result.guides);
+  assert.equal(held.dx, 120); assert.equal(held.dy, 150);
+  const edge = snapSelection(figure, new Set([a.id]), 161, 151, 4);
+  assert.equal(edge.dx, 160);
+  assert(edge.guides.some((guide) => guide.axis === "x" && guide.position === 240 && guide.kind === "element-edge"));
+  const centre = snapSelection(figure, new Set([a.id]), 231, 161, 4);
+  assert.equal(centre.dx, 230); assert.equal(centre.dy, 160);
+  assert(centre.guides.every((guide) => guide.kind === "element-center"));
+  const bypassed = snapSelection(figure, group, 121, 151, 0, result.guides);
+  assert.deepEqual(bypassed, { dx: 121, dy: 151, guides: [] });
+  const bounded = snapSelection(figure, group, -100, -100, 0);
+  assert.equal(bounded.dx, -20); assert.equal(bounded.dy, -30);
+  assert.equal(b.x - a.x, 80);
 });
