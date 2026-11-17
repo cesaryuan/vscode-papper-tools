@@ -26,14 +26,14 @@
   "scripts": {
     "sync:papper-config": "tsx scripts/sync-papper-configuration.ts",
     "test:configuration-contract": "tsx --test tests/configurationContract.test.ts",
-    "bundle": "tsx scripts/copy-mathjax-fonts.ts && tsx scripts/copy-pdfjs-assets.ts && esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --outfile=dist/extension.js --minify --legal-comments=none && esbuild src/imageDirectoryPreview/webview.ts --bundle --platform=browser --format=iife --target=es2022 --outfile=dist/image-directory-preview.js --minify --legal-comments=none && esbuild src/docxPreview/webview.mts --bundle --platform=browser --format=esm --target=es2022 --outfile=dist/docx-preview.mjs --minify --legal-comments=none",
-    "check:bundle": "node --check dist/extension.js && node --check dist/image-directory-preview.js && node --check dist/docx-preview.mjs && node --check dist/pdfjs/pdf.worker.mjs",
+    "bundle": "tsx scripts/copy-mathjax-fonts.ts && tsx scripts/copy-pdfjs-assets.ts && tsx scripts/copy-codicons.ts && esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --outfile=dist/extension.js --minify --legal-comments=none && esbuild src/imageDirectoryPreview/webview.ts --bundle --platform=browser --format=iife --target=es2022 --outfile=dist/image-directory-preview.js --minify --legal-comments=none && esbuild src/docxPreview/webview.mts --bundle --platform=browser --format=esm --target=es2022 --outfile=dist/docx-preview.mjs --minify --legal-comments=none && esbuild src/subfigureEditor/webview.ts --bundle --platform=browser --format=iife --target=es2022 --outfile=dist/subfigure-editor.js --minify --legal-comments=none",
+    "check:bundle": "node --check dist/extension.js && node --check dist/image-directory-preview.js && node --check dist/docx-preview.mjs && node --check dist/pdfjs/pdf.worker.mjs && node --check dist/subfigure-editor.js",
     "package:vsix": "npm run check && vsce package",
     "publish:marketplace": "npm run check && vsce publish",
     "publish:patch": "npm run check && vsce publish patch",
     "publish:minor": "npm run check && vsce publish minor",
     "profile:test-md": "tsx scripts/profile-test-md.ts test.md",
-    "test": "tsx --test tests/docxPreview.test.ts tests/externalFileOpener.test.ts tests/parser.test.ts tests/configurationContract.test.ts tests/elementAttributes.test.ts tests/markdownYamlHeader.test.ts tests/manuscriptStyle.test.ts tests/styleConfiguration.test.ts tests/reviewerReplyDefinitions.test.ts tests/inlineFoldParser.test.ts tests/headingStructure.test.ts tests/mathHoverParser.test.ts tests/metafilePreviewAppearance.test.ts tests/metafileResourceCache.test.ts tests/customImagePreviewContext.test.ts tests/pathResolver.test.ts tests/imageDirectoryPreview.test.ts tests/paragraphTranslationDiff.test.ts tests/commentParagraph.test.ts tests/pandocNumbering.test.ts tests/inlayReferences.test.ts tests/inlaySettings.test.ts tests/cslStyles.test.ts tests/papperSettings.test.ts tests/papperToolPolicy.test.ts tests/papperUpdateProgress.test.ts tests/papperHtmlServer.test.ts tests/papperMarkdownScrollIntent.test.ts tests/papperMarkdownClickNavigation.test.ts tests/papperMarkdownScrollAnchors.test.ts tests/papperMarkdownMathRendering.test.ts tests/papperMarkdownLifecycle.test.ts tests/htmlResourceUris.test.ts tests/paragraphTranslator.test.ts tests/paragraphReferenceHover.test.ts tests/workspaceIndex.test.ts tests/asyncLruCache.test.ts tests/imagePreviewCache.test.ts tests/localization.test.ts",
+    "test": "tsx --test tests/docxPreview.test.ts tests/externalFileOpener.test.ts tests/parser.test.ts tests/configurationContract.test.ts tests/elementAttributes.test.ts tests/markdownYamlHeader.test.ts tests/manuscriptStyle.test.ts tests/styleConfiguration.test.ts tests/reviewerReplyDefinitions.test.ts tests/inlineFoldParser.test.ts tests/headingStructure.test.ts tests/mathHoverParser.test.ts tests/metafilePreviewAppearance.test.ts tests/metafileResourceCache.test.ts tests/customImagePreviewContext.test.ts tests/pathResolver.test.ts tests/imageDirectoryPreview.test.ts tests/paragraphTranslationDiff.test.ts tests/commentParagraph.test.ts tests/pandocNumbering.test.ts tests/inlayReferences.test.ts tests/inlaySettings.test.ts tests/cslStyles.test.ts tests/papperSettings.test.ts tests/papperToolPolicy.test.ts tests/papperUpdateProgress.test.ts tests/papperHtmlServer.test.ts tests/papperMarkdownScrollIntent.test.ts tests/papperMarkdownClickNavigation.test.ts tests/papperMarkdownScrollAnchors.test.ts tests/papperMarkdownMathRendering.test.ts tests/papperMarkdownLifecycle.test.ts tests/htmlResourceUris.test.ts tests/paragraphTranslator.test.ts tests/paragraphReferenceHover.test.ts tests/workspaceIndex.test.ts tests/asyncLruCache.test.ts tests/imagePreviewCache.test.ts tests/localization.test.ts && tsx --test tests/subfigureEditor.test.ts",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test && npm run bundle && npm run check:bundle"
   },
@@ -48,7 +48,8 @@
     "onCommand:pandocManuscriptTools.openImagePreviewToSide",
     "onCommand:pandocManuscriptTools.openImageDirectoryPreview",
     "onCustomEditor:pandocManuscriptTools.metafilePreviewEditor",
-    "onCustomEditor:pandocManuscriptTools.svgPreviewEditor"
+    "onCustomEditor:pandocManuscriptTools.svgPreviewEditor",
+    "onCustomEditor:pandocManuscriptTools.subfigureEditor"
   ],
   "main": "./dist/extension.js",
   "files": [
@@ -66,7 +67,9 @@
     "assets/mathjax-newcm-font/cjs/svg/dynamic/*.js",
     "package.nls.json",
     "package.nls.*.json",
-    "l10n/**"
+    "l10n/**",
+    "dist/subfigure-editor.js",
+    "dist/codicons/**"
   ],
   "dependencies": {
     "@jimp/core": "^1.6.1",
@@ -74,6 +77,7 @@
     "@jimp/js-png": "^1.6.1",
     "@jimp/plugin-resize": "^1.6.1",
     "@mathjax/src": "^4.0.0",
+    "@vscode/codicons": "^0.0.46-24",
     "@xmldom/xmldom": "^0.9.12",
     "fflate": "^0.8.3",
     "jsonc-parser": "^3.3.1",
@@ -140,6 +144,21 @@
         "command": "pandocManuscriptTools.openSvgSourceText",
         "title": "%command.openSvgSourceText%",
         "icon": "$(file-code)"
+      },
+      {
+        "command": "pandocManuscriptTools.newSubfigure",
+        "title": "%command.newSubfigure%",
+        "icon": "$(layout)"
+      },
+      {
+        "command": "pandocManuscriptTools.editSubfigure",
+        "title": "%command.editSubfigure%",
+        "icon": "$(layout)"
+      },
+      {
+        "command": "pandocManuscriptTools.convertSubfigure",
+        "title": "%command.convertSubfigure%",
+        "icon": "$(layout)"
       }
     ],
     "menus": {
@@ -178,6 +197,11 @@
           "command": "pandocManuscriptTools.openSvgSourceText",
           "when": "activeCustomEditorId == pandocManuscriptTools.svgPreviewEditor",
           "group": "navigation"
+        },
+        {
+          "command": "pandocManuscriptTools.editSubfigure",
+          "when": "resourceExtname == .svg && activeCustomEditorId != pandocManuscriptTools.subfigureEditor",
+          "group": "navigation@25"
         }
       ],
       "explorer/context": [
@@ -190,6 +214,16 @@
           "command": "pandocManuscriptTools.openImageDirectoryPreview",
           "when": "explorerResourceIsFolder",
           "group": "navigation@20"
+        },
+        {
+          "command": "pandocManuscriptTools.newSubfigure",
+          "when": "resourceScheme == file",
+          "group": "papper@30"
+        },
+        {
+          "command": "pandocManuscriptTools.editSubfigure",
+          "when": "resourceScheme == file && resourceExtname == .svg",
+          "group": "papper@31"
         }
       ],
       "commandPalette": [
@@ -228,6 +262,18 @@
           "command": "pandocManuscriptTools.openSvgSourceText",
           "when": "activeCustomEditorId == pandocManuscriptTools.svgPreviewEditor"
         }
+      ],
+      "editor/context": [
+        {
+          "command": "pandocManuscriptTools.convertSubfigure",
+          "when": "editorLangId == markdown",
+          "group": "papper@30"
+        },
+        {
+          "command": "pandocManuscriptTools.editSubfigure",
+          "when": "editorLangId == markdown || resourceExtname == .svg",
+          "group": "papper@31"
+        }
       ]
     },
     "customEditors": [
@@ -253,6 +299,16 @@
           }
         ],
         "priority": "default"
+      },
+      {
+        "viewType": "pandocManuscriptTools.subfigureEditor",
+        "displayName": "%editor.subfigureEditor%",
+        "selector": [
+          {
+            "filenamePattern": "*.svg"
+          }
+        ],
+        "priority": "option"
       }
     ],
     "configuration": {

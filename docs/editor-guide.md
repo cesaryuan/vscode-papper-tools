@@ -130,6 +130,79 @@ Check final layout and updated table-of-contents fields in Word.
 
 **Papper Tools: Build DOCX and Open in Word** saves the current Markdown file, builds a Word document, and opens it. Each build uses a separate temporary directory, so it does not overwrite a document already open in Word. Use Word's **Save As** to keep the result, or run `papper build docx` in the manuscript project to create the normal project output.
 
+## Combination figures
+
+Create a figure with **Papper Tools: Create Combination Figure**, or select local
+images in Explorer and use the same command from its context menu. From a saved
+Markdown manuscript, the command records the insertion point and inserts the
+figure reference on first save. **Papper Tools: Edit Combination Figure** opens
+an editable SVG selected in Explorer or referenced under the Markdown cursor.
+Ordinary SVGs remain source images; this editor only edits its own structured
+combination figures.
+
+Use **Add images** for PNG, JPEG, WebP, SVG and other supported browser image
+formats. Dropping image files onto the canvas also works; dropped file bytes
+without a usable local path are embedded. Local images use relative SVG links
+by default. **Embed image assets** produces a self-contained SVG; toggle it off
+to restore links for images originally imported from files. Keep linked images
+with the SVG when moving a project. Save As recalculates relative paths.
+
+**Auto arrange** uses a column count or a **Panels per row** list such as `2, 3, 2`.
+**Width weights** sets panel width proportions in list order, for example
+`1, 2, 1`. Drag list items to reorder them. Drag canvas images to position them,
+use corner handles to resize, and Shift-click for multi-selection. The alignment
+and spacing buttons act on the selected elements. Arrow keys move by 1pt;
+Shift+Arrow moves by 10pt. Alt temporarily bypasses snapping while dragging.
+Labels follow their image until **Renumber** is explicitly used.
+
+The right inspector controls panel labels, text, typeface, point size, bold,
+italic, superscript, subscript, colour and alignment. Captions wrap at the panel
+width. Independent text boxes provide shared row and column titles. Crop values
+are percentages removed from the original image's edges; they change the visible
+area without rewriting the source image.
+
+Set figure width in mm or inches. Changing it preserves manually positioned
+panel proportions while keeping caption and label sizes in points. **A4 paper
+reference** shows a 210 × 297mm page and the figure's width as a percentage of
+A4 width; this reference is never exported and does not imply manuscript margins
+or column width. **Fit** fits the page or figure in the viewport. Hold Ctrl and
+scroll over the canvas to zoom around the pointer, or enter a zoom percentage.
+Toolbar actions include the standard VS Code Codicons beside their labels. Screen zoom
+does not change saved dimensions. Further resizing the whole image in Word,
+including automatic reduction to fit the manuscript column, scales its text
+too. Keep the authored width within the target column width to preserve its
+point sizes. Text already inside a source image is not changed by the
+layout editor.
+
+Save the SVG to keep both visible graphics and editable layout data. The total
+figure caption stays in Markdown, where Papper supplies numbering. **Export PNG**
+uses the selected DPI, writes physical resolution metadata and retains the same
+layout; it does not add the A4 reference or selection handles.
+
+To convert an existing `pandoc-crossref` group, put the cursor inside its
+`::: {#fig:...}` or `<div id="fig:...">` block and run
+**Papper Tools: Convert Subfigure Group to SVG**. Alternatively, hover over the
+group or its parent/child citation in the current manuscript and choose
+**Edit subfigure layout**. The action opens the hovered group even if the text
+cursor is elsewhere. This opens an unsaved draft.
+First save creates the SVG, replaces the original group with a normal SVG image
+and preserves the main identifier and total caption. In the current manuscript,
+simple child references become main-figure references followed by their panel
+letter. Save the updated Markdown before building. One workspace undo reverses
+the initial conversion, including creation of its new SVG.
+
+Conversion supports inline Markdown images, percentage widths, basic rich
+subcaptions and crop attributes. Unsupported group content, mixed reference
+citations, explicit child links, unsupported attributes, conflicting output
+filenames or source edits during the session stop replacement and leave the
+original manuscript intact. Reopen conversion after updating the source, or
+create an independent figure. References from other manuscript files are not
+rewritten.
+
+Nested SVG source images remain whole assets. Papper may rasterize a composed
+SVG for DOCX compatibility; a saved SVG is not a guarantee that every Word
+renderer preserves its vectors.
+
 ## Troubleshooting
 
 | Symptom | Check |

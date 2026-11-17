@@ -46,6 +46,7 @@ Open that folder in VS Code and edit `manuscript.md`. If uv is already installed
 | Adjust Word formatting | Open **Papper Tools: Open Settings** for MathType, fonts, tables, images, page layout, and cross-references; apply manuscript, project, or reply settings |
 | Choose a journal's citation style | Search Zotero styles and the Chinese community collection, compare citation and bibliography previews, and apply a local CSL file |
 | Inspect equations and figures | Hover over math or local SVG/EMF/WMF images; browse image folders in grid, masonry, or folder layouts |
+| Compose multi-panel figures | Arrange images and captions in an editable SVG, compare physical size with A4 paper, export PNG, or convert a Markdown subfigure group |
 | Review a revision | Fold revision attributes and line-reference excerpts; navigate from `reply_to_reviewers.md` to labels in the workspace-root `manuscript.md` |
 
 Configuration keys, values, table attributes, and `[]{t="..."}` insertions also have completion and hover help. Style actions on headings, text, images, and tables let you edit the relevant Word formatting without searching through every setting.
@@ -100,6 +101,15 @@ HTML-style source synchronization is not available in this view. Pagination, dir
 ## More editing conveniences
 
 Right-click an image folder and choose **Papper Tools: View Images** to browse its contents. SVG, EMF, and WMF files also have dedicated previews.
+
+Use **Papper Tools: Create Combination Figure** to lay out local images in an
+SVG. Select multiple image files in Explorer to start with those panels, or
+create a figure from Markdown and insert it on first save. **Edit Combination
+Figure** reopens its saved layout. To import an existing `pandoc-crossref` group,
+place the cursor inside it and run **Convert Subfigure Group to SVG**.
+The editor includes an A4 paper reference, physical dimensions, fixed-point
+text, automatic rows, manual alignment, cropping, rich captions and PNG export.
+See [Combination figures](docs/editor-guide.md#combination-figures).
 
 English paragraph and code-comment translation is available on hover. This uses Google Translate or Microsoft Translator; turn off `pandocManuscriptTools.enableParagraphHoverTranslation` in Settings if you do not want translation requests.
 

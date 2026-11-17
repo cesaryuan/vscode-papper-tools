@@ -16,6 +16,19 @@ Press **F5** and select **Run Papper Tools** to launch an Extension Development 
 
 Run `npm run check` for the existing type checks, tests, and bundle validation before a code release.
 
+## Combination figure editor
+
+The combination figure editor lives in `src/subfigureEditor/`. Its shared
+physical layout and SVG serializer are independent of VS Code; the custom
+document host owns file access, native history, recovery and transactional
+Markdown replacement. The browser measures text with the selected font and
+supplies line geometry for SVG/PNG parity. See
+[the design](docs/subfigure-layout-editor-design.md) and
+[SVG storage decision](docs/adr/0001-editable-subfigure-svg.md).
+`tests/subfigureEditor.test.ts` covers saved output, sizing, cropping, asset
+portability and manuscript preservation; browser and Extension Development Host
+checks should additionally exercise gestures and native save/undo.
+
 ## Papper configuration contract
 
 Configuration definitions are owned by Papper. After building the Papper CLI,

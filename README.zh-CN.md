@@ -100,6 +100,12 @@ HTML 方便写作时检查内容，最终分页请在 Word 中确认。[Papper �
 
 右键点击图片文件夹，选择 **Papper Tools: View Images** 即可浏览其中的图片。SVG、EMF 和 WMF 文件也有专门的预览。
 
+运行 **Papper Tools: 创建论文组合图**，将本地图片排版为可再次编辑的 SVG。
+也可以在资源管理器中多选图片后创建，或从 Markdown 编辑器创建并在首次保存时插入图片引用。
+使用 **Papper Tools: 编辑论文组合图** 继续编辑；已有 `pandoc-crossref` 子图组可将光标放在组内，
+运行 **Papper Tools: 将子图组转换为 SVG**。编辑器提供 A4 纸张比例参照、物理尺寸、固定 pt 字号、
+自动逐行排版、手动对齐、裁剪、富文本子题注和 PNG 导出。详见[组合图使用指南](docs/editor-guide.md#combination-figures)。
+
 悬停英文段落或代码注释时可以查看翻译。翻译使用 Google Translate 或 Microsoft Translator；不需要时，可在设置中关闭 `pandocManuscriptTools.enableParagraphHoverTranslation`。
 
 ## 文档导航

@@ -6,6 +6,7 @@ All notable changes to Papper Tools are documented in this file.
 
 ### Changed
 
+- Fix conversion of bare child-figure citations (including parenthesized citations), add pointer-anchored Ctrl+wheel canvas zoom, an edit-layout hover action on supported subfigure groups and their local references, and official VS Code Codicons on the combination-editor toolbar.
 - Match the DOCX preview to the image preview's themed icon toolbar, with actual-size/fit-width actions, page and zoom boundary feedback, and pointer-anchored Ctrl+wheel zoom that keeps page images visible while redrawing.
 - Translate paragraph hovers using Papper's rendered cross-reference and citation text, including lists, tables and diff previews; share version-checked build results even when inlay hints are hidden.
 - Stream Papper installation and update command output into notification progress messages for manual and confirmed automatic updates, retaining full logs in the Papper Tools output channel.
@@ -15,6 +16,8 @@ All notable changes to Papper Tools are documented in this file.
 - Organize Papper settings into themed cards and named groups with short titles, separate descriptions, visible inheritance badges and aligned controls; collapse field paths, complete YAML editors and legacy DOCX options, and adapt navigation and bibliography previews to narrow windows.
 
 ### Added
+
+- Add a structured SVG combination-figure editor with automatic rows, manual layout, A4 size reference, fixed-point rich text, non-destructive image cropping, linked/embedded assets and physical-resolution PNG export. Create figures from Explorer or Markdown, and convert supported `pandoc-crossref` groups on first save with an undoable manuscript/reference replacement.
 
 - Add an independent experimental DOCX paginated preview using Papper's resident build/PDF service and bundled offline PDF.js, with debounced unsaved-buffer updates, manual/save refresh, bounded visible-page rendering, zoom, page navigation, position retention and preservation of the previous preview on failure. Embed Docxide in Papper instead of requiring its CLI, and use static cross-references in previews while preserving ordinary export settings.
 

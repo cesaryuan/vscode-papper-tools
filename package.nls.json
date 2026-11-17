@@ -35,5 +35,9 @@
   "configuration.paragraphHoverTranslationTargetLanguage": "Target language code for paragraph hover translations, for example zh or zh-TW.",
   "configuration.imageDirectoryPreviewScanDepth": "Maximum subfolder depth scanned by Image Directory Preview. Use -1 for unlimited recursion, 0 for only the selected folder, or a positive integer for that many subfolder levels.",
   "configuration.imageDirectoryPreviewIncludedFolderKeywords": "Only include images whose root-relative folder path contains one of these case-insensitive keywords. Leave empty to include all folders not excluded.",
-  "configuration.imageDirectoryPreviewExcludedFolderKeywords": "Skip folders whose root-relative path contains one of these case-insensitive keywords. Exclusion takes precedence over inclusion."
+  "configuration.imageDirectoryPreviewExcludedFolderKeywords": "Skip folders whose root-relative path contains one of these case-insensitive keywords. Exclusion takes precedence over inclusion.",
+  "command.newSubfigure": "Papper Tools: Create Combination Figure",
+  "command.editSubfigure": "Papper Tools: Edit Combination Figure",
+  "command.convertSubfigure": "Papper Tools: Convert Subfigure Group to SVG",
+  "editor.subfigureEditor": "Papper Combination Figure Editor"
 }

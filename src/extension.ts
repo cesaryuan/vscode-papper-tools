@@ -29,6 +29,7 @@ import { ElementAttributeProvider } from "./elementAttributes/providers";
 import { PapperSettingsController, OPEN_PAPPER_SETTINGS_COMMAND } from "./papperSettings/controller";
 import { PapperConfigurationSync } from "./papperConfigurationSync";
 import { openFileWithDefaultApplication } from "./externalFileOpener";
+import { SubfigureEditorController } from "./subfigureEditor/controller";
 
 /**
  * Activates the local Pandoc Markdown helper extension.
@@ -38,6 +39,7 @@ import { openFileWithDefaultApplication } from "./externalFileOpener";
 export function activate(context: vscode.ExtensionContext) {
   configureLocalization(vscode.l10n.bundle, vscode.env.language, (message, ...args) => vscode.l10n.t(message, ...args));
   const output = vscode.window.createOutputChannel(EXTENSION_NAME);
+  context.subscriptions.push(new SubfigureEditorController(context, output));
   const configurationSync = new PapperConfigurationSync(output);
   /** Deduplicates schema refreshes across completion, hover and settings requests. */
   const ensureConfiguration = () => configurationSync.ensure();

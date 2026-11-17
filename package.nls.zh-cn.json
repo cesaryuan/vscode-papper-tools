@@ -35,5 +35,9 @@
   "configuration.paragraphHoverTranslationTargetLanguage": "段落悬停翻译的目标语言代码，例如 zh 或 zh-TW",
   "configuration.imageDirectoryPreviewScanDepth": "图片目录预览扫描的最大子文件夹深度。-1 表示无限递归，0 表示仅扫描选定文件夹，正整数表示子文件夹层数",
   "configuration.imageDirectoryPreviewIncludedFolderKeywords": "仅包含相对于根目录的文件夹路径中含有这些关键词的图片，不区分大小写。留空时包含所有未排除的文件夹",
-  "configuration.imageDirectoryPreviewExcludedFolderKeywords": "跳过相对于根目录的路径中含有这些关键词的文件夹，不区分大小写。排除规则优先于包含规则"
+  "configuration.imageDirectoryPreviewExcludedFolderKeywords": "跳过相对于根目录的路径中含有这些关键词的文件夹，不区分大小写。排除规则优先于包含规则",
+  "command.newSubfigure": "Papper Tools: 创建论文组合图",
+  "command.editSubfigure": "Papper Tools: 编辑论文组合图",
+  "command.convertSubfigure": "Papper Tools: 将子图组转换为 SVG",
+  "editor.subfigureEditor": "Papper 组合图布局编辑器"
 }
