@@ -1,4 +1,5 @@
 /** Shared physical layout model for the SVG editor, saved figures and PNG exports. */
+import { arrangePanelTree, type PanelTree } from "./panelTree";
 export const PT_PER_MM = 72 / 25.4;
 export const A4 = { width: 210 * PT_PER_MM, height: 297 * PT_PER_MM };
 export type RichRun = { text: string; bold?: boolean; italic?: boolean; script?: "super" | "sub" };
@@ -19,7 +20,7 @@ export type FigureElement = Panel | SharedText;
 export type FigureDocument = {
   format: "papper-subfigure"; version: 1; width: number; height: number; autoHeight: boolean; embedded: boolean;
   background: "white" | "transparent"; font: TextStyle;
-  layout: { mode?: "rows" | "free"; columns: number; rows: number[]; weights: number[]; gap: number; rowGap: number; padding: number };
+  layout: { mode?: "rows" | "panels" | "free"; tree?: PanelTree; columns: number; rows: number[]; weights: number[]; gap: number; rowGap: number; padding: number };
   elements: FigureElement[];
 };
 export type MeasureText = (run: RichRun, style: TextStyle) => number;
@@ -118,6 +119,7 @@ export function elementHeight(element: FigureElement): number {
 
 /** Arranges panels by explicit rows or column count, with optional per-panel width weights. */
 export function arrangePanels(figure: FigureDocument, measure: MeasureText = estimateText): void {
+  if (figure.layout.mode === "panels") { arrangePanelTree(figure, measure); return; }
   const panels = figure.elements.filter((element): element is Panel => element.kind === "panel");
   const { padding, gap, rowGap, columns, rows, weights } = figure.layout;
   let index = 0, rowIndex = 0, y = padding;
@@ -196,7 +198,7 @@ export function validateFigure(value: unknown): asserts value is FigureDocument 
   const positive = (number: number): boolean => Number.isFinite(number) && number > 0;
   if (!positive(figure.width) || !positive(figure.height)) throw new Error("Figure dimensions must be positive");
   if (!positive(figure.font?.size) || !Number.isInteger(figure.layout?.columns) || figure.layout.columns < 1
-    || figure.layout.mode !== undefined && !["rows", "free"].includes(figure.layout.mode)
+    || figure.layout.mode !== undefined && !["rows", "panels", "free"].includes(figure.layout.mode)
     || figure.layout.rows.some((number) => !Number.isInteger(number) || number < 1)
     || figure.layout.weights.some((number) => !positive(number))
     || [figure.layout.gap, figure.layout.rowGap, figure.layout.padding].some((number) => !Number.isFinite(number) || number < 0)) throw new Error("Invalid layout settings");
@@ -208,5 +210,19 @@ export function validateFigure(value: unknown): asserts value is FigureDocument 
     if (element.kind === "panel" && (!positive(element.height) || !positive(element.ratio) || !element.source
       || Object.values(element.crop).some((number) => !Number.isFinite(number) || number < 0)
       || element.crop.left + element.crop.right >= 100 || element.crop.top + element.crop.bottom >= 100)) throw new Error("Invalid image crop or size");
+  }
+  if (figure.layout.tree) {
+    const panelIds = new Set(figure.elements.filter((element) => element.kind === "panel").map((element) => element.id)), seen = new Set<string>();
+    /** Rejects duplicate or missing leaves so saving cannot silently discard panels in nested layouts. */
+    const checkTree = (node: PanelTree): void => {
+      if (!node?.id || seen.has(node.id)) throw new Error("Invalid panel layout tree");
+      seen.add(node.id);
+      if (node.kind === "panel") { if (!panelIds.delete(node.id)) throw new Error("Unknown panel in layout"); }
+      else if (node.kind === "split" && ["x", "y"].includes(node.axis) && node.children.length >= 2
+        && (!node.weights || node.weights.length === node.children.length && node.weights.every(positive))) node.children.forEach(checkTree);
+      else throw new Error("Invalid panel layout split");
+    };
+    checkTree(figure.layout.tree);
+    if (panelIds.size) throw new Error("Panels missing from layout");
   }
 }

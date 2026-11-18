@@ -147,32 +147,43 @@ by default. **Embed image assets** produces a self-contained SVG; toggle it off
 to restore links for images originally imported from files. Keep linked images
 with the SVG when moving a project. Save As recalculates relative paths.
 
-New figures use **Panel rows**. Drag a panel to the left or right of another
-panel to insert it into that row; widths follow each cropped image's aspect
-ratio so images in the destination row have equal heights.
-Drop near the top or bottom of a row to create a separate row. While dragging,
+**Panel layout** supports nested horizontal and vertical splits. Drop near a
+panel's left, right, top or bottom to divide that panel's region. For example,
+put A beside B, then drop C below B to obtain one image on the left and two
+stacked images on the right. Drop at the figure's outer edge or anywhere in
+the surrounding A4 paper whitespace to add an entire row or column around the
+existing layout: below/above adds a bottom/top row, and left/right adds a column.
+The side whitespace beyond the figure's left/right boundary adds a column
+throughout the full paper height, including the top and bottom corners.
+Between those side strips, the bottom of the A4 sheet adds a row even when
+the figure occupies only the top portion of the paper.
+The hint names the insertion direction. While dragging,
 the canvas shows a translucent copy following the pointer, previews the resulting
 layout and highlights the moved panels. The copy keeps following the pointer
 even outside a docking zone.
 Release to apply the layout as one undoable edit, or press Escape to cancel.
 Labels, captions and crops stay with their panels.
 
-Drag the gray dashed vertical divider between panels to change their relative widths.
+Drag gray dashed vertical or horizontal dividers to change adjacent regions'
+relative widths or heights. Side-by-side images use equal image heights by
+default; nested groups account for captions and gaps. Regions align while
+images keep their aspect ratios, with unused space where needed.
 With **Snap** enabled, dividers snap to 1/4, 1/3, 1/2, 2/3 and 3/4 of the
-figure width, equal widths or cropped-image heights for the adjacent pair, and
-divider positions in other rows. A temporary guide names the captured position.
+figure width or height, equal adjacent regions, cropped-image heights for
+side-by-side images, and other parallel dividers. A temporary guide names the captured position.
 Snapping uses a screen-sized tolerance at every zoom level; move further to
 release it, hold Alt to bypass it, or turn off **Snap** for continuous resizing.
-The figure width, other rows' width proportions and physical text sizes stay
+The figure width, unrelated split proportions and physical text sizes stay
 unchanged. Select several panels with Shift-click to move them together.
 Panels can also be dragged from the element list onto the canvas. Quick presets
 on the left offer one, two or three panels per row, or a full-width first panel
-followed by pairs.
+followed by pairs. **Left 1 · Right 2** and **Left 2 · Right 1** create common
+three-image asymmetric arrangements; remaining images go in rows below them.
 
 Choose **Free positioning** for independent coordinates and corner resizing.
 **Align and distribute** aligns the edges or centres of selected elements, or
 gives them equal gaps; it does not create rows. These actions need at least two
-selected elements and are disabled for row-controlled panels. In free positioning,
+selected elements and are disabled for panels controlled by the structured layout. In free positioning,
 Arrow keys move by 1pt, Shift+Arrow by 10pt, and Alt temporarily bypasses snapping.
 While moving, the selection's edges and centres snap to the canvas or other
 elements, with horizontal and vertical guides showing each captured alignment.
@@ -180,15 +191,19 @@ A multiple selection snaps as one group. Guides disappear on release or
 cancellation and are excluded from saved SVGs and PNG exports. The **Snap**
 checkbox and Alt bypass apply to both divider resizing and free movement.
 Existing SVGs without a saved layout mode open in free positioning to preserve
-their manual placement. Switching to Panel rows applies the current row settings.
+their manual placement. Existing row-layout SVGs keep their geometry on opening;
+docking upgrades them to nested layouts. Switching to Panel layout restores its
+saved structure, or starts from the row settings when no structure is saved.
 
 **Advanced grid settings** holds the numeric controls. **Default panels per row**
 (formerly Columns) is the fallback when custom counts are absent; **Custom row
-counts** specifies successive rows, such as `2, 1, 3`. Presets and docking update
-the row arrangement, so these values usually need no manual entry. Changing the
+counts** specifies successive rows, such as `2, 1, 3`. Row presets provide the
+same arrangement visually. Changing the
 default count clears custom counts. **Width weights** gives relative widths in
-panel order; leave weights empty for equal image heights. In Panel rows, edits
-to these grid controls apply immediately and **Auto arrange** is disabled.
+panel order; leave weights empty for equal image heights. Changing counts or
+width weights replaces nested splits with a row arrangement. Gap and padding
+changes preserve the structure. In Panel layout these changes apply immediately
+and **Auto arrange** is disabled.
 In Free positioning, **Auto arrange** applies the grid settings to reset manual
 panel positions. Existing explicit width weights remain in use. Labels change only
 when **Renumber** is explicitly used.
@@ -198,6 +213,16 @@ italic, superscript, subscript, colour and alignment. Captions wrap at the panel
 width. Independent text boxes provide shared row and column titles. Crop values
 are percentages removed from the original image's edges; they change the visible
 area without rewriting the source image.
+
+Select one image to show its floating **Crop image** button. In crop mode, drag
+the black edge or corner handles to change the visible frame; the removed areas
+remain visible under dark shading. Drag inside the frame to reposition the
+image. Choose **Done** or press Enter to apply the whole crop as one undoable
+edit; **Cancel** or Escape discards the session. **Reset crop** reveals the full
+source again, then Done applies the reset. Clicking elsewhere on the canvas also
+applies the crop. In Panel layout, regions reflow after completion; in Free
+positioning, the crop frame becomes the image's new physical bounds. Captions
+stay attached. Numeric crop fields remain available for precise adjustments.
 
 Set figure width in mm or inches. Changing it preserves manually positioned
 panel proportions while keeping caption and label sizes in points. **A4 paper

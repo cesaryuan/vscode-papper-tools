@@ -6,6 +6,8 @@ All notable changes to Papper Tools are documented in this file.
 
 ### Changed
 
+- Accept Panel docking throughout the A4 paper whitespace, including the sheet bottom far below a short figure, with explicit top/bottom row and left/right column hints. Side whitespace adds columns throughout the full paper height, including its corners. Preserve local panel splits and reject drops outside the canvas.
+- Upgrade combination figures to nested Panel layout, with local four-sided docking, horizontal/vertical dividers, asymmetric three-panel presets and preserved legacy row geometry. Add a floating crop toolbar with edge/corner handles, shaded source preview, image panning, reset, cancellation and one-step undo.
 - Snap combination-figure width dividers to common canvas fractions, equal adjacent widths or image heights, and other rows' dividers. Show temporary alignment guides for divider resizing and free movement, including selection edges and centres, with zoom-independent tolerance and Alt bypass.
 - Smooth combination-figure dragging by retaining image nodes and updating once per animation frame; show a continuous translucent panel copy while docking. Use gray dashed width dividers, disable Auto arrange in Panel rows, and default row widths to equal cropped-image heights while preserving manual proportions.
 - Make combination-figure layout visual: drag panels beside one another or above/below rows with live previews, resize adjacent widths with dividers, use quick row presets, and retain a separate free-positioning mode. Clarify grid counts and alignment controls, add descriptions to every editor button, and keep toolbar history focused on the active figure with availability feedback.

@@ -2,6 +2,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { createFigure, createPanel, arrangePanels, validateFigure, type FigureDocument, type Panel } from "./model";
+import { syncPanelTree } from "./panelTree";
 import { parseFigureSvg } from "./document";
 import { serializeFigure } from "./svg";
 import { absoluteAsset, figureAssets, hydrateFigure, portableFigure, setEmbedded, IMAGE_TYPES } from "./assets";
@@ -191,7 +192,8 @@ export class SubfigureEditorController implements vscode.CustomEditorProvider<Fi
       if (!initial) { panel.x = 12 + figure.elements.length * 4; panel.y = 12 + figure.elements.length * 4; }
       figure.elements.push(panel);
     }
-    if (initial || figure.layout.mode === "rows") arrangePanels(figure);
+    if (initial || figure.layout.mode === "rows" || figure.layout.mode === "panels") arrangePanels(figure);
+    else if (figure.layout.tree) syncPanelTree(figure);
     const result = figure.embedded ? await setEmbedded(figure, true) : figure;
     this.change(document, result, t("Add images"));
     await this.sendState(document);

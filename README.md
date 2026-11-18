@@ -108,7 +108,7 @@ create a figure from Markdown and insert it on first save. **Edit Combination
 Figure** reopens its saved layout. To import an existing `pandoc-crossref` group,
 place the cursor inside it and run **Convert Subfigure Group to SVG**.
 The editor includes an A4 paper reference, physical dimensions, fixed-point
-text, automatic rows, manual alignment, cropping, rich captions and PNG export.
+text, nested panel docking, manual alignment, interactive image cropping, rich captions and PNG export.
 See [Combination figures](docs/editor-guide.md#combination-figures).
 
 English paragraph and code-comment translation is available on hover. This uses Google Translate or Microsoft Translator; turn off `pandocManuscriptTools.enableParagraphHoverTranslation` in Settings if you do not want translation requests.

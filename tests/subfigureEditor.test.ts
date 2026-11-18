@@ -5,7 +5,7 @@ import { mkdtemp, writeFile, mkdir, rm } from "node:fs/promises";
 import * as path from "node:path";
 import { tmpdir } from "node:os";
 import { DOMParser, type Element } from "@xmldom/xmldom";
-import { createFigure, createPanel, arrangePanels, resizeFigure, reflowFigure, renumberPanels, validateFigure, visibleRatio, type Panel } from "../src/subfigureEditor/model";
+import { A4, PT_PER_MM, createFigure, createPanel, arrangePanels, resizeFigure, reflowFigure, renumberPanels, validateFigure, visibleRatio, type Panel } from "../src/subfigureEditor/model";
 import { serializeFigure } from "../src/subfigureEditor/svg";
 import { parseFigureSvg } from "../src/subfigureEditor/document";
 import { importMarkdownGroup, conversionEdits } from "../src/subfigureEditor/markdown";
@@ -13,6 +13,8 @@ import { hydrateFigure, portableFigure, assetDataUri, setEmbedded } from "../src
 import { setPngDpi } from "../src/subfigureEditor/png";
 import { SourceModuleFixture } from "./helpers/sourceModule";
 import { dockPanels, findDockTarget, panelRows, resizeRowPair, snapRowDivider, snapSelection } from "../src/subfigureEditor/layout";
+import { dockTreePanels, findTreeDock, nestedPanelPreset, resizeTreeDivider, syncPanelTree, treeGeometry, treePanelIds } from "../src/subfigureEditor/panelTree";
+import { cropFromFrame, cropGeometry, dragCropFrame, panCropSource } from "../src/subfigureEditor/crop";
 
 /** Applies independent source edits using their original UTF-16 offsets. */
 function apply(text: string, edits: Array<{ start: number; end: number; text: string }>): string {
@@ -336,4 +338,127 @@ test("free movement aligns a selection as a group and reports guides for the cap
   const bounded = snapSelection(figure, group, -100, -100, 0);
   assert.equal(bounded.dx, -20); assert.equal(bounded.dy, -30);
   assert.equal(b.x - a.x, 80);
+});
+
+test("nested panels support one left image beside two stacked right images with fixed-size captions and reversible geometry", () => {
+  const figure = sample(); figure.elements = figure.elements.slice(0, 3); figure.layout.weights = [];
+  nestedPanelPreset(figure, 1); arrangePanels(figure);
+  const [left, top, bottom] = figure.elements as Panel[];
+  assert(left.x < top.x && top.x === bottom.x);
+  assert(top.y === left.y && bottom.y > top.y + top.height);
+  assert(Math.abs(top.width - bottom.width) < .001);
+  assert(Math.abs(left.y + left.height + left.gap + left.lines.length * 12.5
+    - bottom.y - bottom.height - bottom.gap - bottom.lines.length * 12.5) < .001);
+  assert(figure.elements.every((element) => element.style.size === 10));
+  validateFigure(figure);
+  const reopened = parseFigureSvg(serializeFigure(figure)), saved = structuredClone(reopened.elements);
+  arrangePanels(reopened);
+  reopened.elements.forEach((element, index) => {
+    assert(Math.abs(element.x - saved[index].x) < .001); assert(Math.abs(element.y - saved[index].y) < .001);
+    assert(Math.abs(element.width - saved[index].width) < .001);
+  });
+  const dividers = treeGeometry(figure).dividers;
+  assert(dividers.some((divider) => divider.axis === "x"));
+  const horizontal = dividers.find((divider) => divider.axis === "y"), beforeLeft = structuredClone(left), oldHeight = top.height;
+  resizeTreeDivider(figure, horizontal.split, horizontal.index, 15, 0);
+  assert(top.height > oldHeight + 1);
+  assert.deepEqual(left, beforeLeft);
+  validateFigure(figure);
+  const resized = parseFigureSvg(serializeFigure(figure));
+  arrangePanels(resized);
+  resized.elements.forEach((element, index) => {
+    const original = figure.elements[index];
+    for (const key of ["x", "y", "width"] as const) assert(Math.abs(element[key] - original[key]) < .001);
+    if (element.kind === "panel" && original.kind === "panel") assert(Math.abs(element.height - original.height) < .001);
+  });
+});
+
+test("four-sided local docking creates nested splits and deleting or adding panels preserves every remaining image", () => {
+  const figure = sample(); figure.elements = figure.elements.slice(0, 3); figure.layout.rows = [3]; figure.layout.weights = []; arrangePanels(figure);
+  const [left, top, moving] = figure.elements as Panel[], labels = figure.elements.map((panel) => panel.kind === "panel" && panel.label);
+  const target = findTreeDock(figure, new Set([moving.id]), top.x + top.width / 2, top.y + top.height - 1);
+  assert.equal(target.scope, "panel"); assert.equal(target.side, "bottom");
+  dockTreePanels(figure, new Set([moving.id]), target);
+  assert(left.x < top.x); assert.equal(top.x, moving.x); assert(moving.y > top.y);
+  assert.deepEqual(figure.elements.map((panel) => panel.kind === "panel" && panel.label), labels);
+  assert.deepEqual(treePanelIds(figure.layout.tree), figure.elements.map((panel) => panel.id));
+  figure.elements = figure.elements.filter((panel) => panel.id !== top.id);
+  arrangePanels(figure);
+  assert.equal(treePanelIds(figure.layout.tree).length, 2);
+  const added = createPanel(figure, "new.svg", "New"); figure.elements.push(added);
+  arrangePanels(figure);
+  assert.equal(new Set(treePanelIds(figure.layout.tree)).size, 3);
+  validateFigure(figure);
+  const outer = findTreeDock(figure, new Set([added.id]), -2, left.y + left.height / 2);
+  assert.equal(outer.scope, "figure"); assert.equal(outer.side, "left");
+  dockTreePanels(figure, new Set([added.id]), outer);
+  assert.equal(treePanelIds(figure.layout.tree)[0], added.id);
+  validateFigure(figure);
+});
+
+test("A4 whitespace docks whole rows and columns, including the paper bottom, while rejecting off-paper drops", () => {
+  const original = sample(); original.layout.rows = [5]; original.layout.weights = []; arrangePanels(original);
+  const marginX = (A4.width - original.width) / 2, marginY = 22 * PT_PER_MM;
+  const canvas = { x: -marginX, y: -marginY, width: A4.width, height: A4.height };
+  const moving = original.elements[2].id, ids = new Set([moving]);
+  const cases = [
+    { x: original.width / 2, y: A4.height - marginY - 2, side: "bottom" },
+    { x: -marginX + 2, y: A4.height - marginY - 2, side: "left" },
+    { x: -marginX + 2, y: original.height / 2, side: "left" },
+    { x: A4.width - marginX - 2, y: original.height / 2, side: "right" },
+    { x: A4.width - marginX - 2, y: -marginY + 2, side: "right" },
+    { x: A4.width - marginX - 2, y: A4.height - marginY - 2, side: "right" },
+    { x: original.width + 1, y: -marginY + 2, side: "right" },
+    { x: original.width + 1, y: A4.height - marginY - 2, side: "right" },
+    { x: original.width / 2, y: -marginY + 2, side: "top" },
+  ] as const;
+  for (const position of cases) {
+    const figure = structuredClone(original), target = findTreeDock(figure, ids, position.x, position.y, canvas);
+    assert.equal(target?.scope, "figure"); assert.equal(target?.side, position.side);
+    dockTreePanels(figure, ids, target);
+    const panel = figure.elements.find((element) => element.id === moving) as Panel;
+    const others = figure.elements.filter((element): element is Panel => element.kind === "panel" && element.id !== moving);
+    if (position.side === "bottom") assert(others.every((other) => panel.y > other.y + other.height));
+    if (position.side === "top") assert(others.every((other) => panel.y + panel.height < other.y));
+    if (position.side === "left") assert(others.every((other) => panel.x + panel.width < other.x));
+    if (position.side === "right") assert(others.every((other) => panel.x > other.x + other.width));
+    assert.equal(figure.width, original.width);
+    validateFigure(parseFigureSvg(serializeFigure(figure)));
+  }
+  assert.equal(findTreeDock(original, ids, original.width / 2, A4.height - marginY + 1, canvas), undefined);
+  assert.equal(findTreeDock(original, ids, -marginX - 1, original.height / 2, canvas), undefined);
+  assert.equal(findTreeDock(original, ids, A4.width - marginX + 1, original.height / 2, canvas), undefined);
+  assert.equal(findTreeDock(original, ids, original.width / 2, -marginY - 1, canvas), undefined);
+  // Hiding A4 keeps the figure-edge target but does not leave an invisible paper-sized drop surface.
+  assert.equal(findTreeDock(original, ids, original.width / 2, A4.height - marginY - 2), undefined);
+  assert.equal(findTreeDock(original, ids, original.width / 2, original.height + 10)?.side, "bottom");
+});
+
+test("invalid nested metadata cannot duplicate or omit a picture in the saved SVG", () => {
+  const figure = sample(); figure.layout.mode = "panels"; syncPanelTree(figure);
+  const duplicate = structuredClone(figure);
+  duplicate.layout.tree = { kind: "split", id: "bad", axis: "x", children: [
+    { kind: "panel", id: figure.elements[0].id }, { kind: "panel", id: figure.elements[0].id }] };
+  assert.throws(() => validateFigure(duplicate), /layout/);
+  figure.layout.tree = { kind: "panel", id: figure.elements[0].id };
+  assert.throws(() => validateFigure(figure), /missing/);
+});
+
+test("interactive crop frames round-trip existing crops and preserve the source while constraining edges and image panning", () => {
+  const figure = sample(), panel = figure.elements[0] as Panel;
+  panel.crop = { left: 10, right: 20, top: 5, bottom: 15 };
+  const originalSource = panel.source, original = cropGeometry(panel), recovered = cropFromFrame(original.source, original.frame);
+  for (const key of ["left", "right", "top", "bottom"] as const) assert(Math.abs(recovered[key] - panel.crop[key]) < .000001);
+  const smaller = dragCropFrame(original.source, original.frame, "se", -20, -10, 8);
+  const cropped = cropFromFrame(original.source, smaller);
+  assert(cropped.right > panel.crop.right); assert(cropped.bottom > panel.crop.bottom);
+  const panned = panCropSource(original.source, smaller, 10000, -10000), panCrop = cropFromFrame(panned, smaller);
+  assert(Math.abs(panCrop.left) < .000001); assert(Math.abs(panCrop.bottom) < .000001);
+  const collapsed = dragCropFrame(original.source, smaller, "nw", 10000, 10000, 8);
+  assert(collapsed.width >= 8 - .000001 && collapsed.height >= 8 - .000001);
+  panel.crop = cropped; reflowFigure(figure);
+  const reopened = parseFigureSvg(serializeFigure(figure)).elements[0] as Panel;
+  assert.deepEqual(reopened.crop, cropped); assert.equal(reopened.source, originalSource);
+  const reset = cropFromFrame(original.source, original.source);
+  assert.deepEqual(reset, { left: 0, right: 0, top: 0, bottom: 0 });
 });
