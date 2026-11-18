@@ -12,7 +12,7 @@ Install the locked dependencies, then open this repository in VS Code:
 npm ci
 ```
 
-Press **F5** and select **Run Papper Tools** to launch an Extension Development Host. The launch task bundles the extension first. Set the manuscript folder argument in `.vscode/launch.json` to a folder on your machine; use `test_project/` for the focused editing examples. Check references, formula hovers, Outline, configuration completion, settings, and previews in that window.
+Press **F5** and select **Run Papper Tools**. The launch task bundles the extension and opens the sibling Papper checkout's `template/manuscript.md` in an Extension Development Host. The debug window uses the **Papper Tools Development** profile and loads the development copy of Papper Tools with other installed extensions disabled. If you do not have a sibling Papper checkout, change the last two launch arguments to `${workspaceFolder}/test_project` and `${workspaceFolder}/test_project/README.md`.
 
 Run `npm run check` for the existing type checks, tests, and bundle validation before a code release.
 

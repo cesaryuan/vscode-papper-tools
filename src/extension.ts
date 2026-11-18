@@ -41,10 +41,10 @@ import { PapperActionHoverProvider } from "./hoverActions";
 export function activate(context: vscode.ExtensionContext) {
   configureLocalization(vscode.l10n.bundle, vscode.env.language, (message, ...args) => vscode.l10n.t(message, ...args));
   const output = vscode.window.createOutputChannel(EXTENSION_NAME);
-  context.subscriptions.push(new SubfigureEditorController(context, output));
   const configurationSync = new PapperConfigurationSync(output);
   /** Deduplicates schema refreshes across completion, hover and settings requests. */
   const ensureConfiguration = () => configurationSync.ensure();
+  context.subscriptions.push(new SubfigureEditorController(context, output, ensureConfiguration, () => configurationSync.hasInstalledDefaults));
   const diagnostics = vscode.languages.createDiagnosticCollection("pandoc-manuscript-tools");
   const index = new PandocWorkspaceIndex(output);
   const mathRenderer = new MathJaxRenderer(output);

@@ -1,9 +1,11 @@
 /** Shared physical layout model for the SVG editor, saved figures and PNG exports. */
 import { arrangePanelTree, type PanelTree } from "./panelTree";
+import { DEFAULT_CHINESE_FONT } from "./fonts";
+import { newElementId } from "./ids";
 export const PT_PER_MM = 72 / 25.4;
 export const A4 = { width: 210 * PT_PER_MM, height: 297 * PT_PER_MM };
 export type RichRun = { text: string; bold?: boolean; italic?: boolean; script?: "super" | "sub" };
-export type TextStyle = { family: string; size: number; color: string; align: "left" | "center" | "right" };
+export type TextStyle = { family: string; cjkFamily?: string; size: number; color: string; align: "left" | "center" | "right" };
 export type TextLine = { runs: RichRun[]; width: number };
 export type Crop = { left: number; top: number; right: number; bottom: number };
 export type Panel = {
@@ -26,21 +28,16 @@ export type FigureDocument = {
 export type MeasureText = (run: RichRun, style: TextStyle) => number;
 
 /** Makes a new editable figure in physical points, independent of screen zoom or DPI. */
-export function createFigure(): FigureDocument {
-  return { format: "papper-subfigure", version: 1, width: 160 * PT_PER_MM, height: 85 * PT_PER_MM,
-    autoHeight: true, embedded: false, autoRenumber: true, background: "white", font: { family: "Times New Roman", size: 10, color: "#000000", align: "center" },
+export function createFigure(width = 160 * PT_PER_MM): FigureDocument {
+  return { format: "papper-subfigure", version: 1, width, height: 85 * PT_PER_MM,
+    autoHeight: true, embedded: false, autoRenumber: true, background: "white", font: { family: "Times New Roman", cjkFamily: DEFAULT_CHINESE_FONT, size: 10, color: "#000000", align: "center" },
     layout: { mode: "rows", columns: 2, rows: [], weights: [], gap: 10, rowGap: 16, padding: 8 }, elements: [] };
-}
-
-/** Generates stable element identities without encoding the current visual order. */
-export function newElementId(): string {
-  return `e-${globalThis.crypto.randomUUID()}`;
 }
 
 /** Builds one intact source image with editable crop and attached caption. */
 export function createPanel(figure: FigureDocument, source: string, name: string, ratio = 1.5): Panel {
   const index = figure.elements.filter((element) => element.kind === "panel").length;
-  return { kind: "panel", id: newElementId(), source, name, ratio, x: 8, y: 8, width: 180, height: 120,
+  return { kind: "panel", id: newElementId(figure), source, name, ratio, x: 8, y: 8, width: 180, height: 120,
     label: panelLetter(index), labelPosition: "below", caption: [], style: { ...figure.font },
     crop: { left: 0, right: 0, top: 0, bottom: 0 }, gap: 5 };
 }
@@ -83,7 +80,7 @@ export function wrapText(runs: RichRun[], width: number, style: TextStyle, measu
   /** Publishes a line, including explicit blank lines. */
   const flush = (): void => { lines.push(current); current = { runs: [], width: 0 }; };
   for (const run of runs) {
-    for (const token of run.text.split(/(\n|[ \t]+|[^\u0000-\u02ff])/).filter(Boolean)) {
+    for (const token of run.text.split(/(\n|[ \t]+|[^\u0000-\u02ff])/u).filter(Boolean)) {
       if (token === "\n") { flush(); continue; }
       const fragment = { ...run, text: token };
       if (current.width > 0 && current.width + measure(fragment, style) > width && !/^\s+$/.test(token)) flush();

@@ -144,6 +144,33 @@ The action checks the file's editable layout data; ordinary SVG images do not of
 Ordinary SVGs remain source images; this editor only edits its own structured
 combination figures.
 
+Saving a combination figure writes indented SVG and compact layout JSON for Git
+review. The editor reads image sources and rendered caption lines from the SVG
+artwork. The JSON keeps editable captions, layout and individual style or crop
+settings. Older combination figures migrate on their next save. To edit a newly
+saved file, use an extension version that supports layout metadata v2.
+
+The layout editor opens beside the manuscript. New figures and imported subfigure
+groups start at the writable width of Papper’s DOCX page (paper width minus the
+left and right margins). Project `style.yml` and manuscript `papperSettings`
+override the installed Papper defaults. Opening an existing SVG preserves its saved
+width. In a narrow split, use **Properties** to show or hide the inspector.
+
+Click a subcaption or shared text on the canvas to edit it in place. Press **Enter**
+or click elsewhere to apply the edit, **Shift+Enter** to insert a line break, or
+**Esc** to discard the draft. Drag from the text to move its element. To edit a
+panel letter directly, turn off **Auto renumber** and click the letter.
+
+Select part of a subcaption or shared text to show the small formatting toolbar
+next to the selection. Use it to toggle bold, italic, superscript or subscript,
+or to clear formatting on just the selection. Panel letters remain plain text.
+
+**Western font** and **Chinese font** can be set separately for the selected
+element. The defaults are Times New Roman and SimSun (宋体). To change the whole
+figure, set both under **Default text** and choose **Apply default text to all**.
+Saved SVGs reference the fonts by name; install the chosen fonts on computers
+where the figure needs to render identically.
+
 Use **Add images** for PNG, JPEG, WebP, SVG and other supported browser image
 formats. Dropping image files onto the canvas also works; dropped file bytes
 without a usable local path are embedded. Local images use relative SVG links
@@ -247,7 +274,7 @@ Set figure width in mm or inches. Changing it preserves manually positioned
 panel proportions while keeping caption and label sizes in points. **A4 paper
 reference** shows a 210 × 297mm page and the figure's width as a percentage of
 A4 width; this reference is never exported and does not imply manuscript margins
-or column width. **Fit** fits the page or figure in the viewport. Hold Ctrl and
+or column width. The initial view and **Fit** match the paper or figure to the viewport width. Hold Ctrl and
 scroll over the canvas to zoom around the pointer, or enter a zoom percentage.
 Toolbar actions include the standard VS Code Codicons beside their labels. Screen zoom
 does not change saved dimensions. Further resizing the whole image in Word,
@@ -268,13 +295,14 @@ To convert an existing `pandoc-crossref` group, put the cursor inside its
 `::: {#fig:...}` or `<div id="fig:...">` block and run
 **Papper Tools: Convert Subfigure Group to SVG**. Alternatively, hover over the
 group or its parent/child citation in the current manuscript and choose
-**Edit subfigure layout**. The action opens the hovered group even if the text
-cursor is elsewhere. This opens an unsaved draft.
-First save creates the SVG, replaces the original group with a normal SVG image
-and preserves the main identifier and total caption. In the current manuscript,
-simple child references become main-figure references followed by their panel
-letter. Save the updated Markdown before building. One workspace undo reverses
-the initial conversion, including creation of its new SVG.
+**Edit subfigure layout**. A group with ID `fig:comparison` creates `subfigure-comparison.svg` in the
+workspace folder that contains the manuscript (beside the manuscript if it has
+no workspace folder). It immediately replaces the group with an SVG image,
+preserves the main identifier and total caption, and rewrites simple child
+references in the current manuscript as main-figure references followed by
+their panel label. The saved figure then opens beside the manuscript. Save the
+updated Markdown before building. One workspace undo reverses the conversion,
+including creation of the SVG.
 
 Conversion supports inline Markdown images, percentage widths, basic rich
 subcaptions and crop attributes. Unsupported group content, mixed reference

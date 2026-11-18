@@ -10,6 +10,7 @@ import { A4, PT_PER_MM, createFigure, createPanel, arrangePanels, resizeFigure, 
 import { serializeFigure } from "../src/subfigureEditor/svg";
 import { parseFigureSvg } from "../src/subfigureEditor/document";
 import { importMarkdownGroup, conversionEdits } from "../src/subfigureEditor/markdown";
+import { prepareGroupConversion } from "../src/subfigureEditor/conversion";
 import { hydrateFigure, portableFigure, assetDataUri, setEmbedded } from "../src/subfigureEditor/assets";
 import { setPngDpi } from "../src/subfigureEditor/png";
 import { SourceModuleFixture } from "./helpers/sourceModule";
@@ -47,9 +48,111 @@ test("saved SVG reopens with all pictures, cropped regions and rich captions", (
   assert.equal(saved.getElementsByTagName("image")[1].getAttribute("href"), panel.source);
   assert.equal((saved.getElementsByTagName("image")[1].parentNode as Element).getAttribute("viewBox"), "100 50 700 900");
   assert.equal(saved.getElementsByTagName("foreignObject").length, 0);
-  assert.deepEqual(parseFigureSvg(text), figure);
+  const reopened = parseFigureSvg(text);
+  assert.equal(serializeFigure(reopened), text);
+  // Cached glyph widths depend on the renderer's font measurements.
+  reflowFigure(reopened);
+  assert.deepEqual(reopened, figure);
   assert(text.includes('font-weight="bold"') && text.includes('font-style="italic"') && text.includes('baseline-shift="-0.4em"'));
   assert.throws(() => parseFigureSvg('<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>'), /not an editable/);
+});
+
+test("legacy nested figures get stable short IDs without changing panel references or custom IDs", () => {
+  const figure = sample();
+  const legacy = "e-11abccdf-16b5-48db-aaab-119f35f72d91";
+  const ids = [legacy, "e1", "custom-panel", "e2", "s1"];
+  figure.elements.forEach((element, index) => { element.id = ids[index]; });
+  nestedPanelPreset(figure, 1);
+  figure.layout.tree.id = "e-aabbbbee-7788-47ec-abcd-123456780abc";
+  const reopened = parseFigureSvg(serializeFigure(figure));
+  const shortId = reopened.elements[0].id;
+  assert.match(shortId, /^e\d+$/);
+  assert.deepEqual(reopened.elements.slice(1).map(element => element.id), ids.slice(1));
+  assert.deepEqual(treePanelIds(reopened.layout.tree), [shortId, ...ids.slice(1)]);
+  validateFigure(reopened);
+  const saved = serializeFigure(reopened);
+  assert.ok(saved.includes(`data-element-id="${shortId}"`) && !saved.includes(legacy));
+  assert.equal(serializeFigure(parseFigureSvg(saved)), saved);
+  const batch = ["A", "B"].map(name => createPanel(reopened, `${name}.svg`, name));
+  reopened.elements.push(...batch);
+  syncPanelTree(reopened);
+  validateFigure(reopened);
+});
+
+test("mixed-script SVG text retains rich formatting and separate Chinese and Western faces after reopening", () => {
+  const figure = createFigure();
+  // Older files may omit both Chinese-font settings; keep their existing Western face.
+  delete figure.font.cjkFamily;
+  const title = { kind: "text" as const, id: "title", x: 0, y: 0, width: 300, style: { ...figure.font, family: "Arial" },
+    runs: [{ text: "pH值，𠀀2", bold: true, script: "sub" as const }] };
+  figure.elements.push(title);
+  for (const chinese of ["SimSun", "KaiTi"]) {
+    if (chinese === "KaiTi") title.style.cjkFamily = chinese;
+    const svg = serializeFigure(parseFigureSvg(serializeFigure(figure)));
+    const spans = Array.from(new DOMParser().parseFromString(svg, "image/svg+xml").getElementsByTagName("tspan"));
+    assert.deepEqual(spans.map(span => [span.textContent, span.getAttribute("font-family") || (span.parentNode as Element).getAttribute("font-family")]),
+      [["pH", "Arial"], ["值，𠀀", chinese], ["2", "Arial"]]);
+    assert(spans.every(span => span.getAttribute("font-weight") === "bold" && span.hasAttribute("baseline-shift")));
+  }
+});
+
+test("resaving legacy metadata produces a stable readable SVG without adding spaces to rich captions", () => {
+  const figure = createFigure();
+  const panel = createPanel(figure, 'figures/A&B.svg', "A");
+  panel.labelPosition = "none";
+  panel.caption = [{ text: '"A" & ' }, { text: "<B> ]]>", bold: true }];
+  figure.elements.push(panel);
+  const legacyJson = JSON.stringify(figure).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const oldSvg = `<svg xmlns="http://www.w3.org/2000/svg"><metadata id="papper-subfigure">${legacyJson}</metadata></svg>`;
+  const saved = serializeFigure(parseFigureSvg(oldSvg));
+  assert.match(saved, /^\s*"format": "papper-subfigure",$/m);
+  assert.match(saved, /^ {6}<image /m);
+  const reopened = parseFigureSvg(saved);
+  reflowFigure(figure); reflowFigure(reopened);
+  assert.deepEqual(reopened, figure);
+  assert.equal(serializeFigure(parseFigureSvg(saved)), saved);
+  const xml = new DOMParser().parseFromString(saved, "image/svg+xml");
+  assert.equal(xml.getElementsByTagName("text")[0].textContent, '"A" & <B> ]]>');
+  assert.equal(xml.getElementsByTagName("image")[0].getAttribute("href"), panel.source);
+});
+
+test("compact metadata preserves measured wrapping and reads linked images from their own artwork", () => {
+  const figure = sample();
+  const panel = figure.elements[0] as Panel;
+  panel.labelPosition = "top-right";
+  panel.style = { ...panel.style, size: 13 };
+  reflowFigure(figure, () => 60);
+  const saved = serializeFigure(figure);
+  const metadata = new DOMParser().parseFromString(saved, "image/svg+xml").getElementsByTagName("metadata")[0].textContent;
+  assert(!metadata.includes('"lines"') && !metadata.includes(panel.source));
+  const relinked = saved.replaceAll(panel.source, "figures/new.svg");
+  const reopened = parseFigureSvg(relinked);
+  assert.equal((reopened.elements[0] as Panel).source, "figures/new.svg");
+  assert.equal(serializeFigure(reopened), relinked);
+  assert.throws(() => parseFigureSvg(saved.replace(`data-element-id="${panel.id}"`, 'data-element-id="other"')), /Missing SVG artwork/);
+});
+
+test("new figure widths inherit DOCX margins by side and update on style edits, including reference-margin resets", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "papper-width-"));
+  const doc = { fsPath: path.join(root, "paper.md") };
+  const fixture = new SourceModuleFixture({ vscode: {}, "src/papperBuildUtils.ts": {
+    findPandocManuscriptProject: async () => ({ rootUri: { fsPath: root } }), findExistingPapperExecutable: async (): Promise<undefined> => undefined,
+  }, "src/configurationContract.ts": { getConfigurationContract: () => ({ papperVersion: "fixture", defaults: {
+    standard: { docxPageMargins: { left: "1in", right: "1in" } }, chinese: { docxPageMargins: { left: "36pt", right: "36pt" } },
+  } }) } });
+  const { FigurePageWidth, writableWidth } = fixture.load<typeof import("../src/subfigureEditor/pageWidth")>("src/subfigureEditor/pageWidth.ts");
+  const width = new FigurePageWidth({} as never, async () => {}, {} as never);
+  try {
+    await writeFile(path.join(root, "style.yml"), "docxPageMargins: {left: 1cm}\n");
+    const first = await width.get(doc as never);
+    await writeFile(path.join(root, "style.yml"), "docxPageMargins: {left: 2cm}\n# updated\n");
+    assert(Math.abs((first - await width.get(doc as never)) - 72 / 2.54) < .05);
+    const chinese = await width.get(doc as never, "---\nlang: zh-CN\n---\n");
+    assert.equal(chinese - await width.get(doc as never), 36);
+    // A custom 10-inch page with a two-inch reference right margin, overridden by the manuscript on the left.
+    assert.equal(writableWidth({ width: 14400, left: 720, right: 2880 }, { docxPageMargins: { right: "1cm" } },
+      { docxPageMargins: null }, { docxPageMargins: { left: "1in" } }, false), 504);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("changing physical width preserves manual positions proportionally and keeps printed text size", () => {
@@ -83,6 +186,26 @@ test("mixed rows and width weights preserve every panel without moving independe
   assert.equal(panels[0].label, original);
   renumberPanels(figure);
   assert.equal(panels[0].label, "e");
+});
+
+test("a root-level conversion from a chapter rebases both links and preserves the cited custom panel label", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "papper-crossref-"));
+  try {
+    const chapter = path.join(root, "chapter"), assets = path.join(chapter, "assets");
+    await mkdir(assets, { recursive: true });
+    await writeFile(path.join(assets, "图 A.svg"), '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80"/>');
+    const text = 'See @fig:a.\n\n::: {#fig:p}\n![One](<assets/图 A.svg>){#fig:a label="i"} ![Two](<assets/图 A.svg>){#fig:b}\n\nCombined caption.\n:::\n';
+    const result = await prepareGroupConversion(text, text.indexOf("![One]"), 432, path.join(chapter, "paper.md"), root);
+    assert.equal(result.destination, path.join(root, "subfigure-p.svg"));
+    assert.deepEqual(result.warnings, []);
+    assert.equal(apply(text, result.edits).trim(), 'See [@fig:p] (i).\n\n![Combined caption.](../subfigure-p.svg){#fig:p width="6in"}');
+    const saved = parseFigureSvg(result.bytes.toString());
+    const panel = saved.elements[0] as Panel;
+    assert.equal(panel.source, "chapter/assets/%E5%9B%BE%20A.svg");
+    assert.equal(panel.ratio, 2.5);
+    autoRenumberPanels(saved);
+    assert.equal(panel.label, "i");
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("converting fenced and HTML crossref groups preserves formatted captions, ordering and main references", () => {
@@ -242,7 +365,12 @@ test("Save As rebases links and embedded assets round-trip without changing imag
     assert.equal((hydrateFigure(parseFigureSvg(serializeFigure(portable)), target).elements[0] as Panel).source, source);
     const embedded = await setEmbedded(figure, true);
     assert((embedded.elements[0] as Panel).source.startsWith("data:image/svg+xml;base64,"));
-    const restored = await setEmbedded(embedded, false);
+    const saved = serializeFigure(portableFigure(embedded, target));
+    const metadata = new DOMParser().parseFromString(saved, "image/svg+xml").getElementsByTagName("metadata")[0].textContent;
+    assert(!metadata.includes("base64,"));
+    const reopened = hydrateFigure(parseFigureSvg(saved), target);
+    assert.equal((reopened.elements[0] as Panel).source, (embedded.elements[0] as Panel).source);
+    const restored = await setEmbedded(reopened, false);
     assert.equal((restored.elements[0] as Panel).source, source);
   } finally { await rm(directory, { recursive: true }); }
 });

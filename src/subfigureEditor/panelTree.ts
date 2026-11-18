@@ -1,6 +1,7 @@
 /** Manages nested panel splits, physical layout and divider gestures for structured figures. */
-import { captionRuns, elementHeight, estimateText, newElementId, reflowFigure, visibleRatio, wrapText,
+import { captionRuns, elementHeight, estimateText, reflowFigure, visibleRatio, wrapText,
   type FigureDocument, type MeasureText, type Panel } from "./model";
+import { newElementId } from "./ids";
 
 export type PanelNode = { kind: "panel"; id: string };
 export type SplitNode = { kind: "split"; id: string; axis: "x" | "y"; children: PanelTree[]; weights?: number[] };
@@ -12,32 +13,32 @@ export type TreeDock = ({ scope: "panel"; side: Edge | "center" } | { scope: "fi
   | { scope: "gap"; side: "right" | "bottom"; next: string }) & { anchor: string; marker?: Box };
 
 /** Wraps several nodes in a split while avoiding redundant one-child containers. */
-function split(axis: "x" | "y", children: PanelTree[], weights?: number[]): PanelTree {
-  return children.length === 1 ? children[0] : { kind: "split", id: newElementId(), axis, children, ...(weights ? { weights } : {}) };
+function split(figure: FigureDocument, axis: "x" | "y", children: PanelTree[], weights?: number[]): PanelTree {
+  return children.length === 1 ? children[0] : { kind: "split", id: newElementId(figure, "s"), axis, children, ...(weights ? { weights } : {}) };
 }
 
 /** Converts saved row arrangements into nested splits without discarding explicit width proportions. */
-export function treeFromRows(figure: FigureDocument): PanelTree | undefined {
+export function treeFromRows(figure: FigureDocument, start = 0): PanelTree | undefined {
   const panels = figure.elements.filter((element): element is Panel => element.kind === "panel"), rows: PanelTree[] = [];
-  for (let index = 0; index < panels.length;) {
-    const count = figure.layout.rows[rows.length] || figure.layout.columns, row = panels.slice(index, index + count);
-    const weights = figure.layout.weights.slice(index, index + row.length);
-    rows.push(split("x", row.map((panel) => ({ kind: "panel", id: panel.id })),
+  for (let index = start; index < panels.length;) {
+    const count = (!start && figure.layout.rows[rows.length]) || figure.layout.columns, row = panels.slice(index, index + count);
+    const weights = start ? [] : figure.layout.weights.slice(index, index + row.length);
+    rows.push(split(figure, "x", row.map((panel) => ({ kind: "panel", id: panel.id })),
       weights.length ? row.map((panel, offset) => weights[offset] || visibleRatio(panel)) : undefined));
     index += count;
   }
-  return rows.length ? split("y", rows) : undefined;
+  return rows.length ? split(figure, "y", rows) : undefined;
 }
 
 /** Applies a common asymmetric three-panel preset, placing any remaining panels in rows below it. */
 export function nestedPanelPreset(figure: FigureDocument, leftCount: number): void {
   const panels = figure.elements.filter((element): element is Panel => element.kind === "panel");
   if (panels.length < 3) return;
-  const left = split("y", panels.slice(0, leftCount).map((panel) => ({ kind: "panel", id: panel.id })));
-  const right = split("y", panels.slice(leftCount, 3).map((panel) => ({ kind: "panel", id: panel.id })));
-  const pair = split("x", [left, right]);
-  const rest = treeFromRows({ ...figure, layout: { ...figure.layout, rows: [], weights: [] }, elements: panels.slice(3) });
-  figure.layout.mode = "panels"; figure.layout.tree = rest ? split("y", [pair, rest]) : pair;
+  const left = split(figure, "y", panels.slice(0, leftCount).map((panel) => ({ kind: "panel", id: panel.id })));
+  const right = split(figure, "y", panels.slice(leftCount, 3).map((panel) => ({ kind: "panel", id: panel.id })));
+  const pair = split(figure, "x", [left, right]);
+  const rest = treeFromRows(figure, 3);
+  figure.layout.mode = "panels"; figure.layout.tree = rest ? split(figure, "y", [pair, rest]) : pair;
 }
 
 /** Prunes removed panels, collapses empty containers and preserves the surviving manual shares. */
@@ -59,7 +60,7 @@ export function syncPanelTree(figure: FigureDocument): void {
   const panels = figure.elements.filter((element): element is Panel => element.kind === "panel");
   let tree = figure.layout.tree ? prune(figure.layout.tree, new Set(panels.map((panel) => panel.id))) : treeFromRows(figure);
   const present = new Set(treePanelIds(tree)), added = panels.filter((panel) => !present.has(panel.id));
-  if (added.length) tree = split("y", [...(tree ? [tree] : []), ...added.map((panel): PanelTree => ({ kind: "panel", id: panel.id }))]);
+  if (added.length) tree = split(figure, "y", [...(tree ? [tree] : []), ...added.map((panel): PanelTree => ({ kind: "panel", id: panel.id }))]);
   figure.layout.tree = tree;
 }
 
@@ -236,7 +237,7 @@ export function dockTreePanels(figure: FigureDocument, ids: Set<string>, target:
   if (!root) return;
   const axis = target.side === "left" || target.side === "right" ? "x" : "y";
   const before = target.side === "left" || target.side === "top";
-  const inserted = split(axis, moving.map((id) => ({ kind: "panel", id })));
+  const inserted = split(figure, axis, moving.map((id) => ({ kind: "panel", id })));
   /** Replaces the local leaf, flattening compatible automatic splits for natural side-by-side rows. */
   const insert = (node: PanelTree): PanelTree => {
     if (swap) {
@@ -253,7 +254,7 @@ export function dockTreePanels(figure: FigureDocument, ids: Set<string>, target:
       }
       return { ...node, children: node.children.map(insert) };
     }
-    if (node.id === target.anchor) return split(axis, before ? [inserted, node] : [node, inserted]);
+    if (node.id === target.anchor) return split(figure, axis, before ? [inserted, node] : [node, inserted]);
     if (node.kind === "panel") return node;
     if (node.axis === axis && !node.weights && node.children.some((child) => child.id === target.anchor)) {
       const index = node.children.findIndex((child) => child.id === target.anchor);
@@ -261,7 +262,7 @@ export function dockTreePanels(figure: FigureDocument, ids: Set<string>, target:
     }
     return { ...node, children: node.children.map(insert) };
   };
-  root = target.scope === "figure" ? split(axis, before ? [inserted, root] : [root, inserted]) : insert(root);
+  root = target.scope === "figure" ? split(figure, axis, before ? [inserted, root] : [root, inserted]) : insert(root);
   figure.layout.mode = "panels"; figure.layout.tree = root;
   const order = treePanelIds(root), byId = new Map(figure.elements.map((element) => [element.id, element]));
   figure.elements = [...order.map((id) => byId.get(id)), ...figure.elements.filter((element) => element.kind === "text")];

@@ -6,6 +6,14 @@ All notable changes to Papper Tools are documented in this file.
 
 ### Changed
 
+- Convert a crossref subfigure group and rewrite its manuscript references immediately when editing it. Open the saved SVG from the manuscript’s workspace root.
+- Reduce combination SVG metadata by reading image sources and rendered lines from SVG artwork and omitting unchanged element styles and zero crops. Existing files migrate on save.
+- Use short, figure-local SVG element IDs, including on resave of legacy figures, and narrow the layout editor’s properties panel.
+- Save combination SVGs with indented markup and readable JSON metadata for line-by-line diffs.
+- Start new combination figures at the effective DOCX text width and open the layout editor beside the source. Fit the initial paper view to the split width and collapse properties in narrow splits.
+
+- Edit subcaptions, shared text and manual panel labels directly on the figure canvas with a single click.
+- Format selected caption or shared text with a floating toolbar. Set separate Western and Chinese fonts; Chinese text defaults to SimSun (宋体).
 - Group source-hover commands on one Papper Tools row. On editable combination images, **Edit subfigure layout** follows the caption and figure style actions.
 - Fix a duplicate undo or redo request when a combination-figure keyboard shortcut also reaches the VS Code workbench.
 - Keep panels stationary while dragging. Highlight direct swaps at image centres, local edge splits, insertion between nested rows or columns, and whole-layout drops on the paper margins.

@@ -6,12 +6,14 @@
  * VS Code can manage native undo, dirty state, Save As and draft recovery.
  */
 import { A4, PT_PER_MM, createFigure, reflowFigure, resizeFigure, arrangePanels, alignElements,
-  elementHeight, visibleRatio, renumberPanels, autoRenumberPanels, newElementId, validateFigure,
+  elementHeight, visibleRatio, renumberPanels, autoRenumberPanels, validateFigure,
   type FigureDocument, type FigureElement, type RichRun, type TextStyle, type Panel } from "./model";
 import { serializeFigure, renderElement, escapeXml, decimal } from "./svg";
+import { newElementId } from "./ids";
 import type { EditorMessage, HostMessage } from "./protocol";
 import { panelRows, resizeRowPair, snapRowDivider, snapSelection, type DividerSnap, type AlignmentGuide } from "./layout";
 import { BUTTON_HELP, FORMAT_HELP } from "./help";
+import { chineseUnicodeRange, DEFAULT_CHINESE_FONT, fontSegments, quotedFont } from "./fonts";
 import { dockTreePanels, prepareTreeDock, resizeTreeDivider, syncPanelTree, treeFromRows, treeGeometry,
   nestedPanelPreset, type Box, type TreeDock, type TreeDivider } from "./panelTree";
 import { cropGeometry, cropFromFrame, dragCropFrame, panCropSource, whitespaceCrop } from "./crop";
@@ -28,11 +30,20 @@ function t(message: string, ...args: Array<string | number>): string {
 function node<T extends HTMLElement = HTMLElement>(id: string): T { return document.getElementById(id) as T; }
 const board = document.getElementById("board") as unknown as SVGSVGElement;
 const viewport = node("viewport");
+let fitWidth = true;
+node("properties-toggle").addEventListener("click", () => {
+  const open = node("properties-panel").classList.toggle("open");
+  node("properties-toggle").setAttribute("aria-expanded", String(open));
+});
 const measure = document.createElement("canvas").getContext("2d");
 let figure = createFigure(), revision = -1, sources: Record<string, string> = {};
 let lastValidFigure = structuredClone(figure);
 let selected = new Set<string>(), zoom = .9, a4 = true, unit = "mm", copied: FigureElement[] = [];
+type CanvasTextPart = "text" | "caption" | "label";
+const canvasText = node("canvas-text");
+let inlineEdit: { id: string; part: CanvasTextPart; originalHtml: string } | undefined;
 let pointer: { start: DOMPoint; original: FigureDocument; mode: "move" | "resize" | "dock" | "divider"; id: string; moved: boolean;
+  textPart?: CanvasTextPart;
   ids: Set<string>; right?: string; target?: TreeDock; snap?: DividerSnap; guides?: AlignmentGuide[];
   split?: string; index?: number; treeSnap?: ReturnType<typeof resizeTreeDivider> } | undefined;
 let draggedId: string | undefined, editingText = false, textTimer: ReturnType<typeof setTimeout> | undefined;
@@ -48,8 +59,11 @@ function rowsMode(): boolean { return figure.layout.mode === "rows" || figure.la
 
 /** Measures selected-font glyph advances in the same physical coordinates used by the SVG. */
 function measureRun(run: RichRun, style: TextStyle): number {
-  measure.font = `${run.italic ? "italic " : ""}${run.bold ? "bold " : ""}${style.size * (run.script ? .7 : 1)}px "${style.family.replace(/"/g, "")}"`;
-  return measure.measureText(run.text).width;
+  const prefix = `${run.italic ? "italic " : ""}${run.bold ? "bold " : ""}${style.size * (run.script ? .7 : 1)}px `;
+  return fontSegments(run.text, style).reduce((width, segment) => {
+    measure.font = prefix + quotedFont(segment.family);
+    return width + measure.measureText(segment.text).width;
+  }, 0);
 }
 
 /** Resolves the full-quality source supplied by the host, without modifying saved link paths. */
@@ -107,7 +121,7 @@ function renderCanvas(): void {
   board.innerHTML = (a4 ? `<rect width="${A4.width}" height="${A4.height}" fill="white"/><text x="12" y="18" fill="#888" font-family="Arial" font-size="8">A4 · 210 × 297 mm</text>` : "")
     + `<g id="figure-group" transform="translate(${marginX} ${marginY})">`
     + `<rect width="${figure.width}" height="${figure.height}" fill="${figure.background === "white" ? "white" : "#f2f2f2"}" stroke="#999" stroke-dasharray="4 3" stroke-width=".6" data-figure-background="true"/>`
-    + `<g id="artwork">${figure.elements.map((element) => renderElement(element, imageSource)).join("")}</g>`
+    + `<g id="artwork">${figure.elements.map(canvasElement).join("")}</g>`
     + `<g id="overlays">${canvasOverlays(figure)}</g>`
     + `<g id="snap-overlays">${snapGuides(figure)}</g>`
     + '<g id="crop-overlay"></g><g id="dock-marker" pointer-events="none"></g>'
@@ -116,7 +130,16 @@ function renderCanvas(): void {
   node("status").textContent = t("{0} × {1} mm · {2} elements", w, h, figure.elements.length);
   node("paper-info").textContent = t("{0} mm wide · {1}% of A4 width", Number((figure.width / PT_PER_MM).toFixed(1)), Number((figure.width / A4.width * 100).toFixed(1)));
   if (cropping) renderCrop();
+  if (inlineEdit) positionCanvasText();
   positionPanelTools();
+}
+
+/** Gives cleared text a clickable first line on the canvas without writing a placeholder into the SVG. */
+function canvasElement(element: FigureElement): string {
+  const markup = renderElement(element, imageSource);
+  if (element.lines?.length) return markup;
+  const y = element.y + (element.kind === "panel" ? element.height + element.gap : 0);
+  return markup.slice(0, -4) + `<rect class="empty-text-target" x="${element.x}" y="${y}" width="${element.width}" height="${element.style.size * 1.25}" fill="transparent"/></g>`;
 }
 
 /** Builds inexpensive selection and docking guides separately from source image nodes. */
@@ -159,7 +182,7 @@ function dividerSnapLabel(snap: DividerSnap): string {
 /** Positions a screen-sized crop toolbar above the selected image without including it in SVG output. */
 function positionPanelTools(): void {
   const tools = node("panel-tools"), panel = selection()[0];
-  if (pointer || !cropping && (selection().length !== 1 || panel?.kind !== "panel")) { tools.classList.add("hidden"); return; }
+  if (pointer || inlineEdit || !cropping && (selection().length !== 1 || panel?.kind !== "panel")) { tools.classList.add("hidden"); return; }
   const mode = cropping ? "crop" : "select";
   if (tools.dataset.mode !== mode) {
     tools.dataset.mode = mode;
@@ -353,6 +376,7 @@ function render(): void {
   setValue("columns", figure.layout.columns); setValue("gap", figure.layout.gap); setValue("row-gap", figure.layout.rowGap); setValue("padding", figure.layout.padding);
   setValue("rows", figure.layout.rows.join(", ")); setValue("weights", figure.layout.weights.join(", "));
   setValue("default-family", figure.font.family); setValue("default-size", figure.font.size);
+  setValue("default-cjk", figure.font.cjkFamily || DEFAULT_CHINESE_FONT);
   if (!editingText) renderInspector();
 }
 
@@ -362,7 +386,52 @@ function field(label: string, key: string, value: string | number, type = "numbe
   const automatic = key === "label" && figure.autoRenumber !== false;
   const reason = automatic ? "Turn off Auto renumber to edit this label."
     : locked ? "Panel layout controls this geometry. Drag dividers, or switch to Free positioning for individual sizes." : "";
-  return `<label class="field"><span>${escapeXml(t(label))}</span><input data-property="${key}" type="${type}" value="${escapeXml(String(value))}"${type === "number" ? ' step=".5"' : ""}${reason ? ` disabled title="${escapeXml(t(reason))}"` : ""}></label>`;
+  const list = key === "cjkFamily" ? ' list="chinese-fonts"' : key === "family" ? ' list="fonts"' : "";
+  return `<label class="field"><span>${escapeXml(t(label))}</span><input data-property="${key}" type="${type}" value="${escapeXml(String(value))}"${list}${type === "number" ? ' step=".5"' : ""}${reason ? ` disabled title="${escapeXml(t(reason))}"` : ""}></label>`;
+}
+
+/** Shares the same five commands and accessible descriptions between the inspector and selection toolbar. */
+function formatButtons(): string {
+  return [["bold", "<b>B</b>"], ["italic", "<i>I</i>"], ["superscript", "x²"], ["subscript", "x₂"], ["removeFormat", escapeXml(t("Clear formatting"))]]
+    .map(([command, label]) => `<button data-format="${command}" title="${escapeXml(t(FORMAT_HELP[command]))}" aria-label="${escapeXml(t(FORMAT_HELP[command]))}">${label}</button>`).join("");
+}
+
+const formatBar = node("format-bar");
+formatBar.innerHTML = formatButtons();
+let composingInline = false;
+/** Keeps the mini toolbar next to a visible text selection without intersecting the selected lines. */
+function positionFormatBar(): void {
+  const selection = window.getSelection();
+  if (!inlineEdit || inlineEdit.part === "label" || composingInline || !selection?.rangeCount || selection.isCollapsed
+    || !canvasText.contains(selection.anchorNode) || !canvasText.contains(selection.focusNode)) {
+    formatBar.classList.add("hidden"); return;
+  }
+  const range = selection.getRangeAt(0).getBoundingClientRect(), view = viewport.getBoundingClientRect();
+  if (!range.height || range.bottom <= view.top || range.top >= view.bottom || range.right <= view.left || range.left >= view.right) {
+    formatBar.classList.add("hidden"); return;
+  }
+  formatBar.classList.remove("hidden");
+  const width = formatBar.offsetWidth, height = formatBar.offsetHeight;
+  formatBar.style.left = `${Math.max(view.left + 3, Math.min((range.left + range.right - width) / 2, view.right - width - 3))}px`;
+  formatBar.style.top = `${range.top - height - 5 >= view.top ? range.top - height - 5 : Math.min(range.bottom + 5, view.bottom - height)}px`;
+  for (const button of formatBar.querySelectorAll<HTMLButtonElement>("button:not([data-format=removeFormat])")) {
+    button.setAttribute("aria-pressed", String(document.queryCommandState(button.dataset.format)));
+  }
+}
+document.addEventListener("selectionchange", positionFormatBar);
+viewport.addEventListener("scroll", positionFormatBar);
+window.addEventListener("resize", positionFormatBar);
+canvasText.addEventListener("compositionstart", () => { composingInline = true; positionFormatBar(); });
+canvasText.addEventListener("compositionend", () => { composingInline = false; positionFormatBar(); });
+const fontRule = document.createElement("style");
+document.head.appendChild(fontRule);
+
+/** Applies the Chinese family even to newly typed characters without rewriting the editable DOM or disturbing the IME. */
+function editorFont(style: TextStyle): string {
+  const chinese = quotedFont(style.cjkFamily || DEFAULT_CHINESE_FONT);
+  const rule = `@font-face{font-family:PapperCanvasChinese;src:local(${chinese});unicode-range:${chineseUnicodeRange}}`;
+  if (fontRule.textContent !== rule) fontRule.textContent = rule;
+  return `PapperCanvasChinese, ${quotedFont(style.family)}, ${chinese}`;
 }
 
 /** Converts stored rich runs into a controlled editable fragment, never arbitrary SVG markup. */
@@ -388,11 +457,13 @@ function renderInspector(): void {
     + (panel ? field("Height (pt)", "height", decimal(panel.height)) : "") + "</div>"
     + (panel ? field("Panel label", "label", panel.label, "text") + `<label class="field"><span>${escapeXml(t("Label position"))}</span><select data-property="labelPosition">${["below", "top-left", "top-right", "none"].map((value) => `<option value="${value}"${value === panel.labelPosition ? " selected" : ""}>${escapeXml(t({ below: "Below image", "top-left": "Top left", "top-right": "Top right", none: "Hidden" }[value]))}</option>`).join("")}</select></label>`
       + field("Caption gap (pt)", "gap", panel.gap) : "")
-    + field("Font family", "family", element.style.family, "text") + `<div class="pair">` + field("Font size (pt)", "size", element.style.size) + field("Text color", "color", element.style.color, "color") + "</div>"
+    + field("Western font", "family", element.style.family, "text") + field("Chinese font", "cjkFamily", element.style.cjkFamily || DEFAULT_CHINESE_FONT, "text") + `<div class="pair">` + field("Font size (pt)", "size", element.style.size) + field("Text color", "color", element.style.color, "color") + "</div>"
     + `<label class="field"><span>${escapeXml(t("Text alignment"))}</span><select data-property="align">${["left", "center", "right"].map((value) => `<option${element.style.align === value ? " selected" : ""}>${value}</option>`).join("")}</select></label>`
-    + `<h3>${escapeXml(t(panel ? "Subcaption" : "Text"))}</h3><div class="tools">${[["bold", "B"], ["italic", "I"], ["superscript", "x²"], ["subscript", "x₂"], ["removeFormat", "Clear formatting"]].map(([command, label]) => `<button data-format="${command}" title="${escapeXml(t(FORMAT_HELP[command]))}">${escapeXml(t(label))}</button>`).join("")}</div>`
+    + `<h3>${escapeXml(t(panel ? "Subcaption" : "Text"))}</h3><div class="tools">${formatButtons()}</div>`
     + `<div id="rich-text" class="rich" contenteditable="true" role="textbox" aria-label="${escapeXml(t(panel ? "Subcaption" : "Text"))}">${richHtml(panel ? panel.caption : (element as Extract<FigureElement, { kind: "text" }>).runs)}</div>`
+    + `<p class="muted">${escapeXml(t("Click text on the canvas to edit. Enter applies, Shift+Enter adds a line, and Esc cancels."))}</p>`
     + (panel ? `<h3>${escapeXml(t("Crop (%)"))}</h3><div class="pair">${(["left", "top", "right", "bottom"] as const).map((edge) => field({ left: "Left", top: "Top", right: "Right", bottom: "Bottom" }[edge], `crop.${edge}`, panel.crop[edge])).join("")}</div><p class="muted">${escapeXml(t("Cropping changes only the visible area. The source image stays intact."))}</p><button data-action="openSource" title="${escapeXml(t(BUTTON_HELP.openSource))}">${escapeXml(t("Open source image"))}</button>` : "");
+  node("rich-text").style.fontFamily = editorFont(element.style);
 }
 
 /** Extracts supported rich text from a contenteditable tree, preserving explicit paragraph breaks. */
@@ -415,8 +486,90 @@ function readRichText(root: HTMLElement): RichRun[] {
   return runs;
 }
 
+/** Separates editable captions from panel letters, even when both share the same SVG text line. */
+function canvasTextPart(target: Element, element: FigureElement, event: PointerEvent): CanvasTextPart | undefined {
+  const line = target.closest("text");
+  if (!line && !target.closest(".empty-text-target")) return undefined;
+  if (element.kind === "text") return "text";
+  if (line && element.label && element.labelPosition.startsWith("top-") && line === line.parentElement.querySelector(":scope > text")) {
+    return figure.autoRenumber === false ? "label" : undefined;
+  }
+  if (line && element.label && element.labelPosition === "below" && figure.autoRenumber === false && line === line.parentElement.querySelector(":scope > text")) {
+    const index = line.getCharNumAtPosition(figurePoint(event));
+    if (index >= 0 && index < element.label.length + 2) return "label";
+  }
+  return "caption";
+}
+
+/** Anchors the HTML editor to physical SVG coordinates through zoom, scroll and A4 margins. */
+function positionCanvasText(): void {
+  const element = figure.elements.find(item => item.id === inlineEdit.id);
+  const group = document.getElementById("figure-group") as unknown as SVGGraphicsElement;
+  const matrix = group.getScreenCTM(), bounds = viewport.getBoundingClientRect();
+  const panel = element.kind === "panel" ? element : undefined;
+  const corner = inlineEdit.part === "label" && panel?.labelPosition.startsWith("top-");
+  const width = corner ? Math.min(element.width, Math.max(element.style.size * 4, measureRun({ text: panel.label }, panel.style) + 8)) : element.width;
+  const right = corner && panel.labelPosition === "top-right";
+  const point = new DOMPoint(element.x + (right ? element.width - width - 4 : corner ? 4 : 0),
+    element.y + (corner ? 2 : panel ? panel.height + panel.gap : 0)).matrixTransform(matrix);
+  Object.assign(canvasText.style, { left: `${point.x - bounds.left + viewport.scrollLeft}px`, top: `${point.y - bounds.top + viewport.scrollTop}px`,
+    width: `${width * matrix.a}px`, minHeight: `${element.style.size * 1.25 * matrix.d}px`, fontSize: `${element.style.size * matrix.d}px`,
+    textAlign: corner ? (right ? "right" : "left") : element.style.align, color: element.style.color, fontFamily: editorFont(element.style) });
+  const lines = document.querySelectorAll<SVGTextElement>(`#artwork [data-element-id="${CSS.escape(element.id)}"] > text`);
+  for (const [index, line] of lines.entries()) {
+    const cornerLabel = index === 0 && panel?.label && panel.labelPosition.startsWith("top-");
+    if (Boolean(cornerLabel) === Boolean(corner)) line.style.visibility = "hidden";
+  }
+  positionFormatBar();
+}
+
+/** Opens an independent editing buffer and places the caret where the user released the pointer. */
+function beginCanvasText(id: string, part: CanvasTextPart, event: PointerEvent): void {
+  const element = figure.elements.find(item => item.id === id);
+  const panel = element.kind === "panel" ? element : undefined;
+  canvasText.innerHTML = part === "label" ? escapeXml(panel.label) : richHtml(element.kind === "text" ? element.runs : element.caption);
+  inlineEdit = { id, part, originalHtml: canvasText.innerHTML };
+  canvasText.dataset.prefix = part === "caption" && panel.label && panel.labelPosition === "below" ? `(${panel.label}) ` : "";
+  canvasText.setAttribute("aria-label", t(part === "label" ? "Panel label" : part === "caption" ? "Subcaption" : "Text"));
+  canvasText.classList.remove("hidden"); positionCanvasText(); positionPanelTools();
+  canvasText.focus({ preventScroll: true });
+  const range = document.caretRangeFromPoint(event.clientX, event.clientY) ?? document.createRange();
+  if (!canvasText.contains(range.startContainer)) { range.selectNodeContents(canvasText); range.collapse(false); }
+  window.getSelection().removeAllRanges(); window.getSelection().addRange(range);
+}
+
+/** Applies one edit on exit, or discards the buffer on Escape or a replacement host revision. */
+function finishCanvasText(apply: boolean): void {
+  if (!inlineEdit) return;
+  const { id, part, originalHtml } = inlineEdit;
+  inlineEdit = undefined;
+  composingInline = false;
+  formatBar.classList.add("hidden");
+  canvasText.classList.add("hidden");
+  const element = figure.elements.find(item => item.id === id);
+  if (apply && element && canvasText.innerHTML !== originalHtml) {
+    if (part === "label" && element.kind === "panel") {
+      element.label = canvasText.textContent.trim();
+      const field = document.querySelector<HTMLInputElement>('[data-property="label"]');
+      if (field) field.value = element.label;
+    } else {
+      // Chromium leaves a placeholder break in a contenteditable when the last character is deleted.
+      const runs = canvasText.innerHTML === "<br>" ? [] : readRichText(canvasText);
+      if (element.kind === "text") element.runs = runs; else element.caption = runs;
+      node("rich-text").innerHTML = richHtml(runs);
+    }
+    if (rowsMode() && element.kind === "panel") arrangePanels(figure, measureRun);
+    commit("Edit text", false);
+    // Keep the inspector controls alive: a blur may be caused by clicking one of them.
+    const item = document.querySelector<HTMLElement>(`[data-select="${CSS.escape(id)}"]`);
+    if (element.kind === "text") item.querySelector(".name").textContent = element.runs.map(run => run.text).join("");
+    else item.querySelector(".badge").textContent = element.label ? `(${element.label})` : "▧";
+  } else renderCanvas();
+}
+
 /** Commits the visible rich-text buffer before save, selection changes or native undo. */
 function flushText(): void {
+  if (inlineEdit) { finishCanvasText(true); return; }
   if (textTimer) { clearTimeout(textTimer); textTimer = undefined; }
   const editor = node("rich-text"), element = selection()[0];
   if (!editor || !element) return;
@@ -478,7 +631,7 @@ function startDragGhost(): void {
   for (const element of document.querySelectorAll<SVGElement>("#artwork > [data-element-id]")) {
     if (!pointer.ids.has(element.dataset.elementId)) continue;
     const reference = document.createElementNS("http://www.w3.org/2000/svg", "use");
-    element.id ||= `dock-source-${newElementId()}`;
+    element.id ||= `dock-source-${globalThis.crypto.randomUUID()}`;
     reference.setAttribute("href", `#${element.id}`);
     dragGhost.appendChild(reference);
   }
@@ -521,7 +674,7 @@ function cancelDrag(): void {
 function pointerMove(event: PointerEvent): void {
   if (!pointer) return;
   const point = figurePoint(event), dx = point.x - pointer.start.x, dy = point.y - pointer.start.y;
-  const threshold = pointer.mode === "dock" ? 4 / (zoom * 96 / 72) : .3;
+  const threshold = pointer.mode === "dock" || pointer.textPart ? 4 / (zoom * 96 / 72) : .3;
   if (Math.hypot(dx, dy) < threshold && !pointer.moved) return;
   if (!pointer.moved) {
     board.classList.add("dragging");
@@ -576,17 +729,19 @@ function pointerEnd(event: PointerEvent): void {
   if (cropPointer) { pendingMove = event; flushPointerMove(); cropPointer = undefined; return; }
   if (!pointer) return;
   pendingMove = event; flushPointerMove();
-  const moved = pointer.moved, mode = pointer.mode;
+  const { moved, mode, textPart, id } = pointer;
   const target = pointer.target;
   if (mode === "dock" && target) dockTreePanels(figure, pointer.ids, target, measureRun);
   clearDrag();
-  if (moved && (mode !== "dock" || target)) commit(mode === "dock" ? "Reorganise panel rows" : mode === "divider" ? "Resize row panels" : "Move or resize elements");
+  if (!moved && textPart) beginCanvasText(id, textPart, event);
+  else if (moved && (mode !== "dock" || target)) commit(mode === "dock" ? "Reorganise panel rows" : mode === "divider" ? "Resize row panels" : "Move or resize elements");
   else if (mode === "dock") positionPanelTools();
   else renderCanvas();
 }
 
 board.addEventListener("pointerdown", (event) => {
   if (event.button !== 0) return;
+  finishCanvasText(true);
   if (cropping) {
     const handle = (event.target as Element).closest<SVGElement>("[data-crop-handle]")?.dataset.cropHandle;
     if (handle) {
@@ -595,7 +750,11 @@ board.addEventListener("pointerdown", (event) => {
     } else finishCrop();
     return;
   }
-  const target = event.target as Element, resize = target.closest("[data-resize]")?.getAttribute("data-resize");
+  if (editingText) { flushText(); editingText = false; }
+  // Finishing the previous caption can replace SVG nodes and reflow the next row.
+  const original = event.target as Element;
+  const target = original.isConnected ? original : document.elementFromPoint(event.clientX, event.clientY) ?? board;
+  const resize = target.closest("[data-resize]")?.getAttribute("data-resize");
   const divider = target.closest<SVGElement>("[data-divider],[data-split]");
   const id = divider?.dataset.divider ?? (divider?.dataset.split
     ? selection().find((element) => element.kind === "panel")?.id ?? figure.elements.find((element) => element.kind === "panel")?.id : undefined)
@@ -606,7 +765,8 @@ board.addEventListener("pointerdown", (event) => {
   event.preventDefault(); board.focus({ preventScroll: true }); board.setPointerCapture(event.pointerId);
   const mode = divider ? "divider" : resize ? "resize" : rowsMode() && selection().every((item) => item.kind === "panel") ? "dock" : "move";
   pointer = { start: figurePoint(event), original: mode === "dock" ? figure : structuredClone(figure), mode, id, moved: false, ids: new Set(selected), right: divider?.dataset.right,
-    split: divider?.dataset.split, index: Number(divider?.dataset.index) };
+    split: divider?.dataset.split, index: Number(divider?.dataset.index),
+    textPart: !event.shiftKey && selected.size === 1 && !resize && !divider ? canvasTextPart(target, selection()[0], event) : undefined };
   node("panel-tools").classList.add("hidden");
 });
 board.addEventListener("pointermove", queuePointerMove);
@@ -645,7 +805,7 @@ function action(name: string): void {
   else if (name === "arrange") { if (rowsMode()) return; try { validateFigure(figure); arrangePanels(figure, measureRun); } catch (error) { notice(String(error)); return; } }
   else if (name === "renumber") renumberPanels(figure);
   else if (name === "addText") {
-    const item: FigureElement = { kind: "text", id: newElementId(), x: 12, y: 12, width: Math.min(160, figure.width - 24),
+    const item: FigureElement = { kind: "text", id: newElementId(figure), x: 12, y: 12, width: Math.min(160, figure.width - 24),
       runs: [{ text: t("Shared text") }], style: { ...figure.font } };
     figure.elements.push(item); selected = new Set([item.id]);
   } else if (name === "delete") {
@@ -656,7 +816,7 @@ function action(name: string): void {
   }
   else if (name === "duplicate") {
     const copies = structuredClone(selection());
-    for (const item of copies) { item.id = newElementId(); item.x += 10; item.y += 10; }
+    for (const item of copies) { item.id = newElementId(figure); item.x += 10; item.y += 10; }
     figure.elements.push(...copies); selected = new Set(copies.map((item) => item.id));
     if (rowsMode()) arrangePanels(figure, measureRun);
   } else if (name === "applyFont") { for (const item of figure.elements) item.style = { ...figure.font }; }
@@ -680,7 +840,21 @@ document.addEventListener("mousedown", (event) => {
   const button = (event.target as Element).closest<HTMLElement>("[data-format]");
   if (!button) return;
   event.preventDefault();
+  if (inlineEdit) {
+    if (inlineEdit.part !== "label") { canvasText.focus(); document.execCommand(button.dataset.format); positionFormatBar(); }
+    return;
+  }
   node("rich-text").focus(); document.execCommand(button.dataset.format); flushText();
+});
+canvasText.addEventListener("blur", () => finishCanvasText(true));
+canvasText.addEventListener("keydown", event => {
+  // An IME uses Enter/Escape to accept or dismiss candidates before a draft can be finished.
+  if (event.isComposing || event.keyCode === 229) { event.stopPropagation(); return; }
+  if (event.key === "Escape" || event.key === "Enter" && (!event.shiftKey || inlineEdit?.part === "label")) {
+    event.preventDefault(); event.stopPropagation(); finishCanvasText(event.key === "Enter"); board.focus({ preventScroll: true });
+  } else if ((event.ctrlKey || event.metaKey) && ["z", "y"].includes(event.key.toLowerCase())) {
+    event.stopPropagation(); // Keep undo inside the open draft until it becomes a figure edit.
+  }
 });
 document.addEventListener("focusin", (event) => { if ((event.target as Element).closest("#rich-text")) editingText = true; });
 document.addEventListener("input", (event) => {
@@ -690,8 +864,9 @@ document.addEventListener("input", (event) => {
   }
 });
 document.addEventListener("paste", (event) => {
-  if (!(event.target as Element).closest("#rich-text")) return;
-  event.preventDefault(); document.execCommand("insertText", false, event.clipboardData.getData("text/plain"));
+  if (!(event.target as Element).closest("#rich-text,#canvas-text")) return;
+  const text = event.clipboardData.getData("text/plain");
+  event.preventDefault(); document.execCommand("insertText", false, inlineEdit?.part === "label" ? text.replace(/[\r\n]+/g, " ") : text);
 });
 
 /** Applies a physical geometry or typography change from the property inspector. */
@@ -699,7 +874,8 @@ function propertyChange(input: HTMLInputElement | HTMLSelectElement): void {
   const item = selection()[0];
   if (!item) return;
   const key = input.dataset.property, value = input.type === "number" ? Number(input.value) : input.value;
-  if (["family", "size", "color", "align"].includes(key)) (item.style as unknown as Record<string, unknown>)[key] = value;
+  if (key === "cjkFamily") item.style.cjkFamily = input.value.trim() || DEFAULT_CHINESE_FONT;
+  else if (["family", "size", "color", "align"].includes(key)) (item.style as unknown as Record<string, unknown>)[key] = value;
   else if (key.startsWith("crop.") && item.kind === "panel") item.crop[key.split(".")[1] as keyof Panel["crop"]] = Number(value);
   else (item as unknown as Record<string, unknown>)[key] = value;
   if (rowsMode() && item.kind === "panel") arrangePanels(figure, measureRun);
@@ -733,6 +909,7 @@ document.addEventListener("change", (event) => {
   else if (id === "padding") figure.layout.padding = Number(input.value);
   else if (id === "rows" || id === "weights") figure.layout[id] = input.value.split(/[,\s]+/).filter(Boolean).map(Number);
   else if (id === "default-family") figure.font.family = input.value;
+  else if (id === "default-cjk") figure.font.cjkFamily = input.value.trim() || DEFAULT_CHINESE_FONT;
   else if (id === "default-size") figure.font.size = Number(input.value);
   else return;
   if (rowsMode() && ["columns", "gap", "row-gap", "padding", "rows", "weights", "auto-height", "figure-height"].includes(id)) {
@@ -760,7 +937,7 @@ document.addEventListener("keydown", (event) => {
   else if (modifier && event.key.toLowerCase() === "v") {
     event.preventDefault();
     const copies = structuredClone(copied);
-    for (const item of copies) { item.id = newElementId(); item.x += 10; item.y += 10; }
+    for (const item of copies) { item.id = newElementId(figure); item.x += 10; item.y += 10; }
     figure.elements.push(...copies); selected = new Set(copies.map((item) => item.id));
     if (rowsMode()) arrangePanels(figure, measureRun);
     commit("Paste elements");
@@ -833,6 +1010,7 @@ viewport.addEventListener("drop", async (event) => {
 /** Changes only the view scale, keeping the board point beneath the cursor stationary. */
 function setZoom(value: number, clientX?: number, clientY?: number): void {
   if (!Number.isFinite(value)) return;
+  fitWidth = false;
   if (pointer) cancelDrag();
   const bounds = viewport.getBoundingClientRect(), boardBounds = board.getBoundingClientRect();
   const x = clientX ?? bounds.left + viewport.clientWidth / 2;
@@ -852,13 +1030,19 @@ viewport.addEventListener("wheel", (event) => {
   setZoom(zoom * Math.exp(-delta * .002), event.clientX, event.clientY);
 }, { passive: false });
 
-/** Fits the full A4 reference or figure into the available viewport without changing saved geometry. */
+/** Fits the paper width; the lower part of a portrait page remains accessible by scrolling. */
 function fitCanvas(): void {
-  const { width, height } = canvasGeometry(figure);
-  zoom = Math.max(.1, Math.min(2, (viewport.clientWidth - 56) / (width * 96 / 72), (viewport.clientHeight - 56) / (height * 96 / 72)));
+  fitWidth = true;
+  const { width } = canvasGeometry(figure), style = getComputedStyle(viewport);
+  const available = viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+  if (available <= 0) return;
+  zoom = Math.min(5, available / (width * 96 / 72));
   setValue("zoom", Math.round(zoom * 100)); renderCanvas();
-  viewport.scrollTo(0, 0);
+  viewport.scrollLeft = 0;
 }
+
+// The split can finish resizing after the first host message. Preserve subsequent manual zoom.
+new ResizeObserver(() => { if (fitWidth && revision >= 0 && !pointer) fitCanvas(); }).observe(viewport);
 
 /** Loads intrinsic aspect ratios before laying out newly imported images. */
 async function loadImageRatios(): Promise<boolean> {
@@ -907,6 +1091,7 @@ window.addEventListener("message", async (event: MessageEvent<HostMessage>) => {
     if (same && (pointer || draggedId)) return;
     if (same && cropping) return;
     if (!same) {
+      finishCanvasText(false);
       if (draggedId) endListDock();
       cropping = undefined; cropPointer = undefined; cropAnalysis = undefined; cropFeedback = "";
       if (pointer) clearDrag();

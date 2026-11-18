@@ -6,12 +6,14 @@ import { syncPanelTree } from "./panelTree";
 import { parseFigureSvg } from "./document";
 import { serializeFigure } from "./svg";
 import { absoluteAsset, figureAssets, hydrateFigure, portableFigure, setEmbedded, IMAGE_TYPES } from "./assets";
-import { conversionEdits, importMarkdownGroup, markdownImagePath, type ImportedGroup } from "./markdown";
+import { conversionEdits, markdownImagePath, type ImportedGroup, type TextEdit } from "./markdown";
+import { prepareGroupConversion } from "./conversion";
 import { buildSubfigureHtml } from "./html";
 import type { EditorMessage } from "./protocol";
 import { findImageTokenAtPosition } from "../imagePreview/imageTokenParser";
 import { t } from "../localization";
 import { setPngDpi } from "./png";
+import { FigurePageWidth } from "./pageWidth";
 
 export const SUBFIGURE_EDITOR = "pandocManuscriptTools.subfigureEditor";
 export const NEW_SUBFIGURE = "pandocManuscriptTools.newSubfigure";
@@ -49,12 +51,15 @@ export class SubfigureEditorController implements vscode.CustomEditorProvider<Fi
   private readonly changes = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<FigureEditorDocument>>();
   readonly onDidChangeCustomDocument = this.changes.event;
   private readonly drafts = new Map<string, Draft>();
+  private readonly converting = new Set<vscode.TextDocument>();
   private readonly documents = new Set<FigureEditorDocument>();
+  private readonly pageWidth: FigurePageWidth;
   private readonly disposables: vscode.Disposable[] = [];
   private readonly pendingPng = new Map<FigureEditorDocument, { destination: vscode.Uri; dpi: number }>();
 
   /** Registers explicit editing entry points so normal SVG preview remains available. */
-  constructor(private readonly context: vscode.ExtensionContext, private readonly output: vscode.OutputChannel) {
+  constructor(private readonly context: vscode.ExtensionContext, private readonly output: vscode.OutputChannel, ensureConfiguration: () => Promise<void> = async () => {}, installedDefaults = () => false) {
+    this.pageWidth = new FigurePageWidth(context.globalState, ensureConfiguration, output, installedDefaults);
     this.disposables.push(vscode.window.registerCustomEditorProvider(SUBFIGURE_EDITOR, this, { webviewOptions: { retainContextWhenHidden: true }, supportsMultipleEditorsPerDocument: false }));
     this.disposables.push(vscode.commands.registerCommand(NEW_SUBFIGURE, (uri?: vscode.Uri, selected?: vscode.Uri[]) => this.run(() => this.create(uri, selected))));
     this.disposables.push(vscode.commands.registerCommand(EDIT_SUBFIGURE, (uri?: vscode.Uri | string) => this.run(() => this.edit(typeof uri === "string" ? vscode.Uri.parse(uri) : uri))));
@@ -84,7 +89,7 @@ export class SubfigureEditorController implements vscode.CustomEditorProvider<Fi
     const directory = uri ? ((await vscode.workspace.fs.stat(uri)).type & vscode.FileType.Directory ? uri.fsPath : path.dirname(uri.fsPath))
       : manuscript ? path.dirname(editor.document.uri.fsPath) : vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (!directory) throw new Error("Open a manuscript folder before creating a combination figure");
-    const figure = createFigure();
+    const figure = createFigure(await this.pageWidth.get(manuscript ? editor.document.uri : vscode.Uri.file(path.join(directory, "manuscript.md")), manuscript?.original));
     const images = (selected?.length ? selected : uri ? [uri] : []).filter((item) => IMAGE_TYPES[path.extname(item.fsPath).toLowerCase()]);
     for (const image of images) figure.elements.push(createPanel(figure, image.fsPath, path.basename(image.fsPath)));
     arrangePanels(figure);
@@ -101,26 +106,50 @@ export class SubfigureEditorController implements vscode.CustomEditorProvider<Fi
     uri ??= editor?.document.uri;
     if (!uri || path.extname(uri.path).toLowerCase() !== ".svg") throw new Error("Select a combination SVG or place the cursor on its Markdown image");
     parseFigureSvg(Buffer.from(await vscode.workspace.fs.readFile(uri)).toString("utf8"));
-    await vscode.commands.executeCommand("vscode.openWith", uri, SUBFIGURE_EDITOR);
+    await this.openBeside(uri);
   }
 
-  /** Imports a source group as a draft, leaving the manuscript untouched until first save. */
+  /** Converts the hovered group and its citations before opening the saved SVG beside the manuscript. */
   private async convert(uri?: string, offset?: number, version?: number): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     const document = uri ? await vscode.workspace.openTextDocument(vscode.Uri.parse(uri)) : editor?.document;
     if (!document || document.uri.scheme !== "file") throw new Error("Open a saved Markdown manuscript first");
     if (version !== undefined && document.version !== version) throw new Error("The manuscript changed; hover over the subfigure again");
-    const group = importMarkdownGroup(document.getText(), offset ?? document.offsetAt(editor.selection.active));
-    const directory = path.dirname(document.uri.fsPath);
-    const figure = hydrateFigure(group.figure, directory);
-    await this.openDraft({ figure, directory, manuscript: { uri: document.uri.toString(), group } });
+    if (this.converting.has(document)) return;
+    this.converting.add(document);
+    try {
+      const revision = document.version, text = document.getText(), cursor = offset ?? document.offsetAt(editor.selection.active);
+      const root = vscode.workspace.getWorkspaceFolder(document.uri)?.uri.fsPath ?? path.dirname(document.uri.fsPath);
+      const width = await this.pageWidth.get(document.uri, text);
+      const { destination: filename, bytes, edits, warnings } = await prepareGroupConversion(text, cursor, width, document.uri.fsPath, root);
+      const destination = vscode.Uri.file(filename);
+      for (const warning of warnings) this.output.appendLine(warning);
+      if (document.version !== revision) throw new Error("The manuscript changed; hover over the subfigure again");
+      await this.createWithManuscriptEdits(document, destination, bytes, edits);
+      await this.openBeside(destination);
+    } finally { this.converting.delete(document); }
+  }
+
+  /** Gives SVG creation and manuscript changes one workspace undo entry and refuses to overwrite a file. */
+  private async createWithManuscriptEdits(source: vscode.TextDocument, destination: vscode.Uri, bytes: Uint8Array, edits: TextEdit[]): Promise<void> {
+    const change = new vscode.WorkspaceEdit();
+    change.createFile(destination, { contents: bytes, overwrite: false });
+    for (const edit of edits) change.replace(source.uri, new vscode.Range(source.positionAt(edit.start), source.positionAt(edit.end)), edit.text);
+    if (!await vscode.workspace.applyEdit(change, { isRefactoring: true })) throw new Error("The manuscript and SVG could not be updated");
   }
 
   /** Associates an untitled custom document with recoverable draft state, without creating a disk file. */
   private async openDraft(draft: Draft): Promise<void> {
     const uri = vscode.Uri.file(path.join(draft.directory, `combination-${Date.now()}.svg`)).with({ scheme: "untitled" });
     this.drafts.set(uri.toString(), draft);
-    await vscode.commands.executeCommand("vscode.openWith", uri, SUBFIGURE_EDITOR);
+    await this.openBeside(uri);
+  }
+
+  /** Keeps the manuscript visible and reuses an already open figure instead of creating another split. */
+  private async openBeside(uri: vscode.Uri): Promise<void> {
+    const existing = vscode.window.tabGroups.all.find(group => group.tabs.some(({ input }) =>
+      input instanceof vscode.TabInputCustom && input.viewType === SUBFIGURE_EDITOR && input.uri.toString() === uri.toString()));
+    await vscode.commands.executeCommand("vscode.openWith", uri, SUBFIGURE_EDITOR, { viewColumn: existing?.viewColumn ?? vscode.ViewColumn.Beside, preview: false });
   }
 
   /** Restores a hot-exit backup, a pending draft, or an existing SVG layout. */
@@ -276,11 +305,7 @@ export class SubfigureEditorController implements vscode.CustomEditorProvider<Fi
         : source.getText() === manuscript.original ? [{ start: manuscript.offset, end: manuscript.offset,
           text: `\n\n![Combination figure](${markdownImagePath(path.relative(path.dirname(source.uri.fsPath), destination.fsPath).replace(/\\/g, "/"))}){#fig:combination-${Date.now()} width="${saved.width / 72}in"}\n\n` }]
           : (() => { throw new Error("The manuscript changed; save the SVG separately and insert its image reference manually"); })();
-      const workspaceEdit = new vscode.WorkspaceEdit();
-      // A new file plus source replacement form one undoable operation; never overwrite an unrelated SVG.
-      workspaceEdit.createFile(destination, { contents: bytes });
-      for (const edit of edits) workspaceEdit.replace(source.uri, new vscode.Range(source.positionAt(edit.start), source.positionAt(edit.end)), edit.text);
-      if (!await vscode.workspace.applyEdit(workspaceEdit, { isRefactoring: true })) throw new Error("The manuscript and SVG could not be updated");
+      await this.createWithManuscriptEdits(source, destination, bytes, edits);
       document.manuscript = undefined;
     } else {
       const open = vscode.workspace.textDocuments.find((item) => item.uri.toString() === destination.toString());

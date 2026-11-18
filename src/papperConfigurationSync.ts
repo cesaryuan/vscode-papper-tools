@@ -10,6 +10,8 @@ const executeFile = promisify(execFile);
 
 /** Keeps exports deduplicated and cached while the executable remains unchanged. */
 export class PapperConfigurationSync {
+  /** Indicates whether the active defaults came from the installed binary instead of the offline bundle. */
+  hasInstalledDefaults = false;
   private fingerprint: string | undefined;
   private pending: Promise<void> | undefined;
   private nextCheck = 0;
@@ -30,16 +32,18 @@ export class PapperConfigurationSync {
   private async refresh(force: boolean): Promise<void> {
     try {
       const executable = await findExistingPapperExecutable();
-      if (!executable) return;
+      if (!executable) { this.fingerprint = undefined; this.hasInstalledDefaults = false; return; }
       const stat = await fs.stat(executable);
       const fingerprint = `${executable}:${stat.size}:${stat.mtimeMs}`;
       if (!force && fingerprint === this.fingerprint) return;
       this.fingerprint = fingerprint;
+      this.hasInstalledDefaults = false;
       const { stdout } = await executeFile(executable, ["config", "describe", "--format", "json"], {
         windowsHide: true, timeout: 10000, maxBuffer: 4 * 1024 * 1024,
         env: { ...process.env, PAPPER_DISABLE_UPDATE_CHECK: "1" },
       });
       applyConfigurationContract(JSON.parse(stdout));
+      this.hasInstalledDefaults = true;
       this.output.appendLine(`[Configuration] Loaded editor definitions from ${executable}`);
     } catch (error) {
       // Cache failures too: unsupported old CLI versions must not be invoked on every keystroke.

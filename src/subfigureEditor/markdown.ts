@@ -32,7 +32,7 @@ export function parseCaption(text: string): RichRun[] {
 }
 
 /** Finds an enclosing supported Div using the shared scanner's literal and fence boundaries. */
-export function importMarkdownGroup(text: string, offset: number): ImportedGroup {
+export function importMarkdownGroup(text: string, offset: number, width?: number): ImportedGroup {
   const parsed = parsePandocDocument(text), syntax = new MarkdownSyntax(text);
   const ranges: Array<{ start: number; end: number; innerStart: number; innerEnd: number; parent: string }> = [];
   for (const div of parsed.fencedDivs) {
@@ -54,7 +54,7 @@ export function importMarkdownGroup(text: string, offset: number): ImportedGroup
     if (attributes?.classes.length || attributes?.values.some((item) => item.key !== "original-number")) throw new Error("The figure group has attributes that cannot be preserved");
   }
   const inner = text.slice(selected.innerStart, selected.innerEnd);
-  const figure = createFigure(), children: Record<string, string> = {};
+  const figure = createFigure(width), children: Record<string, string> = {};
   const lines = new MarkdownSyntax(inner).lines;
   let imageRowCount = 0, caption = "", captionStarted = false;
   for (const line of lines) {
@@ -75,7 +75,11 @@ export function importMarkdownGroup(text: string, offset: number): ImportedGroup
       const values = new Map(attributes?.values.map((item) => [item.key, item.value]) ?? []);
       const known = new Set(["width", "height", "label", "original-width", "original-height", "crop-left", "crop-right", "crop-top", "crop-bottom"]);
       if (attributes?.classes.length || [...values.keys()].some((key) => !known.has(key))) throw new Error("An image uses attributes that cannot be preserved by this editor");
-      if (values.has("label")) panel.label = values.get("label");
+      if (values.has("label") && values.get("label") !== panel.label) {
+        // Keep rewritten manuscript citations consistent with explicit labels after the editor opens.
+        figure.autoRenumber = false;
+        panel.label = values.get("label");
+      }
       if (attributes?.id) {
         if (children[attributes.id.value] !== undefined) throw new Error("Duplicate child figure identifiers");
         children[attributes.id.value] = panel.label;

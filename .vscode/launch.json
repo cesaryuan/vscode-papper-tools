@@ -7,11 +7,13 @@
       "request": "launch",
       "preLaunchTask": "bundle",
       "args": [
+        // "--new-window",
+        // "--profile=Papper Tools Development",
+        // "--disable-extensions",
+        "--skip-welcome",
         "--extensionDevelopmentPath=${workspaceFolder}",
-        "E:/research/article/papper/template",
-        // "${workspaceFolder}/test_project",
-        // "--goto",
-        // "E:/research/article/1-3d-mesh/manuscript.md:1:1"
+        "${workspaceFolder}/../papper/template",
+        "${workspaceFolder}/../papper/template/manuscript.md"
       ]
     }
   ]
