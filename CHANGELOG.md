@@ -6,6 +6,9 @@ All notable changes to Papper Tools are documented in this file.
 
 ### Changed
 
+- Fix a duplicate undo or redo request when a combination-figure keyboard shortcut also reaches the VS Code workbench.
+- Keep panels stationary while dragging. Highlight direct swaps at image centres, local edge splits, insertion between nested rows or columns, and whole-layout drops on the paper margins.
+- Offer editing directly from Markdown image hovers for recognized combination SVGs. Renumber panels automatically after edits by default, with a persisted opt-out and one-time manual action. Add reversible outer-whitespace trimming to the crop toolbar, including transparent backgrounds, content previews, cancellation and undo.
 - Accept Panel docking throughout the A4 paper whitespace, including the sheet bottom far below a short figure, with explicit top/bottom row and left/right column hints. Side whitespace adds columns throughout the full paper height, including its corners. Preserve local panel splits and reject drops outside the canvas.
 - Upgrade combination figures to nested Panel layout, with local four-sided docking, horizontal/vertical dividers, asymmetric three-panel presets and preserved legacy row geometry. Add a floating crop toolbar with edge/corner handles, shaded source preview, image panning, reset, cancellation and one-step undo.
 - Snap combination-figure width dividers to common canvas fractions, equal adjacent widths or image heights, and other rows' dividers. Show temporary alignment guides for divider resizing and free movement, including selection edges and centres, with zoom-independent tolerance and Alt bypass.

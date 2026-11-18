@@ -137,6 +137,9 @@ images in Explorer and use the same command from its context menu. From a saved
 Markdown manuscript, the command records the insertion point and inserts the
 figure reference on first save. **Papper Tools: Edit Combination Figure** opens
 an editable SVG selected in Explorer or referenced under the Markdown cursor.
+Hover over a Markdown image referencing a saved combination SVG and choose
+**Edit subfigure layout** to reopen that exact image, regardless of cursor position.
+The action checks the file's editable layout data; ordinary SVG images do not offer it.
 Ordinary SVGs remain source images; this editor only edits its own structured
 combination figures.
 
@@ -157,12 +160,14 @@ The side whitespace beyond the figure's left/right boundary adds a column
 throughout the full paper height, including the top and bottom corners.
 Between those side strips, the bottom of the A4 sheet adds a row even when
 the figure occupies only the top portion of the paper.
-The hint names the insertion direction. While dragging,
-the canvas shows a translucent copy following the pointer, previews the resulting
-layout and highlights the moved panels. The copy keeps following the pointer
-even outside a docking zone.
+Drop a single image on another image's centre to swap their positions. Drop
+in a highlighted gap to insert between the two rows or columns, including
+nested groups. During a drag the original panels stay still: a translucent
+copy follows the pointer and a highlight marks the target. An edge highlight
+means place beside the named image; a whole-panel highlight means swap.
+Returning to the original panel or releasing without a highlight makes no edit.
 Release to apply the layout as one undoable edit, or press Escape to cancel.
-Labels, captions and crops stay with their panels.
+Captions and crops stay with their panels; labels follow the automatic numbering setting.
 
 Drag gray dashed vertical or horizontal dividers to change adjacent regions'
 relative widths or heights. Side-by-side images use equal image heights by
@@ -205,8 +210,12 @@ width weights replaces nested splits with a row arrangement. Gap and padding
 changes preserve the structure. In Panel layout these changes apply immediately
 and **Auto arrange** is disabled.
 In Free positioning, **Auto arrange** applies the grid settings to reset manual
-panel positions. Existing explicit width weights remain in use. Labels change only
-when **Renumber** is explicitly used.
+panel positions. Existing explicit width weights remain in use.
+**Auto renumber** is enabled by default: edits assign a, b, c… from top to bottom
+and left to right. Turn it off to keep existing or custom labels while moving,
+adding or deleting panels. The SVG saves this choice. **Renumber** also works
+as a one-time action when automatic numbering is off. Turn automatic numbering
+off before editing an individual panel label.
 
 The right inspector controls panel labels, text, typeface, point size, bold,
 italic, superscript, subscript, colour and alignment. Captions wrap at the panel
@@ -223,6 +232,15 @@ source again, then Done applies the reset. Clicking elsewhere on the canvas also
 applies the crop. In Panel layout, regions reflow after completion; in Free
 positioning, the crop frame becomes the image's new physical bounds. Captions
 stay attached. Numeric crop fields remain available for precise adjustments.
+
+**Trim whitespace**, beside **Crop image** and inside crop mode, detects uniform
+outer background or transparent margins in the full source image and previews
+a crop around all detected content, with a small safety margin. This includes
+fine text, axes and isolated data points; internal empty areas remain intact.
+Choose **Done** to apply, adjust the handles first if needed, or cancel to discard.
+Detection uses a preview up to 2048 pixels on its longest side; it does not resample
+the saved source. Blank sources and images without a clear uniform border leave
+the crop unchanged. Cropping remains reversible through **Reset crop** and undo.
 
 Set figure width in mm or inches. Changing it preserves manually positioned
 panel proportions while keeping caption and label sizes in points. **A4 paper

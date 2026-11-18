@@ -1,7 +1,7 @@
 /** VS Code custom-document entry point for creating, saving and restoring editable combination figures. */
 import * as vscode from "vscode";
 import * as path from "path";
-import { createFigure, createPanel, arrangePanels, validateFigure, type FigureDocument, type Panel } from "./model";
+import { createFigure, createPanel, arrangePanels, autoRenumberPanels, reflowFigure, validateFigure, type FigureDocument, type Panel } from "./model";
 import { syncPanelTree } from "./panelTree";
 import { parseFigureSvg } from "./document";
 import { serializeFigure } from "./svg";
@@ -59,9 +59,9 @@ export class SubfigureEditorController implements vscode.CustomEditorProvider<Fi
   constructor(private readonly context: vscode.ExtensionContext, private readonly output: vscode.OutputChannel) {
     this.disposables.push(vscode.window.registerCustomEditorProvider(SUBFIGURE_EDITOR, this, { webviewOptions: { retainContextWhenHidden: true }, supportsMultipleEditorsPerDocument: false }));
     this.disposables.push(vscode.commands.registerCommand(NEW_SUBFIGURE, (uri?: vscode.Uri, selected?: vscode.Uri[]) => this.run(() => this.create(uri, selected))));
-    this.disposables.push(vscode.commands.registerCommand(EDIT_SUBFIGURE, (uri?: vscode.Uri) => this.run(() => this.edit(uri))));
+    this.disposables.push(vscode.commands.registerCommand(EDIT_SUBFIGURE, (uri?: vscode.Uri | string) => this.run(() => this.edit(typeof uri === "string" ? vscode.Uri.parse(uri) : uri))));
     this.disposables.push(vscode.commands.registerCommand(CONVERT_SUBFIGURE, (uri?: string, offset?: number, version?: number) => this.run(() => this.convert(uri, offset, version))));
-    this.disposables.push(vscode.languages.registerHoverProvider(PANDOC_SELECTOR, new SubfigureHoverProvider(CONVERT_SUBFIGURE)));
+    this.disposables.push(vscode.languages.registerHoverProvider(PANDOC_SELECTOR, new SubfigureHoverProvider(CONVERT_SUBFIGURE, EDIT_SUBFIGURE)));
     const watcher = vscode.workspace.createFileSystemWatcher("**/*");
     /** Invalidates only documents that reference the changed image, preserving manual geometry. */
     const changed = (uri: vscode.Uri): void => {
@@ -165,6 +165,10 @@ export class SubfigureEditorController implements vscode.CustomEditorProvider<Fi
   private change(document: FigureEditorDocument, figure: FigureDocument, label: string, initial = false): void {
     validateFigure(figure);
     const before = structuredClone(document.figure), after = structuredClone(figure);
+    if (autoRenumberPanels(after)) {
+      if (after.layout.mode === "rows" || after.layout.mode === "panels") arrangePanels(after);
+      else reflowFigure(after);
+    }
     // Acknowledge an optimistic client revision even when this edit has no visible effect.
     if (!initial && JSON.stringify(before) === JSON.stringify(after)) { document.revision++; return; }
     document.figure = after; document.revision++;

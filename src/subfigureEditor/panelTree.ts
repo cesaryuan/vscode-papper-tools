@@ -7,7 +7,9 @@ export type SplitNode = { kind: "split"; id: string; axis: "x" | "y"; children: 
 export type PanelTree = PanelNode | SplitNode;
 export type Box = { x: number; y: number; width: number; height: number };
 export type TreeDivider = { split: string; index: number; axis: "x" | "y"; position: number; box: Box };
-export type TreeDock = { anchor: string; side: "left" | "right" | "top" | "bottom"; scope: "panel" | "figure" };
+type Edge = "left" | "right" | "top" | "bottom";
+export type TreeDock = ({ scope: "panel"; side: Edge | "center" } | { scope: "figure"; side: Edge }
+  | { scope: "gap"; side: "right" | "bottom"; next: string }) & { anchor: string; marker?: Box };
 
 /** Wraps several nodes in a split while avoiding redundant one-child containers. */
 function split(axis: "x" | "y", children: PanelTree[], weights?: number[]): PanelTree {
@@ -152,34 +154,75 @@ export function treeGeometry(figure: FigureDocument): { boxes: Map<string, Box>;
   return { boxes, dividers };
 }
 
-/** Picks local docking or whole-figure insertion within the visible canvas, in figure-relative points. */
+/** Tests the actual painted cell or gutter instead of snapping across unrelated empty space. */
+function containsPoint(box: Box, x: number, y: number): boolean {
+  return x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height;
+}
+
+/** Computes the highlighted strip from the same edge and bounds used for hit testing. */
+function edgeStrip(box: Box, side: Edge, fraction: number): Box {
+  const horizontal = side === "left" || side === "right";
+  const width = box.width * (horizontal ? fraction : 1), height = box.height * (horizontal ? 1 : fraction);
+  return { x: box.x + (side === "right" ? box.width - width : 0), y: box.y + (side === "bottom" ? box.height - height : 0), width, height };
+}
+
+/** Freezes the visible cells and gutters for a gesture; movement only tests small rectangles. */
+export function prepareTreeDock(figure: FigureDocument, moving: Set<string>) {
+  const panels = figure.elements.filter((element): element is Panel => element.kind === "panel");
+  const available = panels.find((panel) => !moving.has(panel.id));
+  const page = { x: 0, y: 0, width: figure.width, height: figure.height };
+  const tree = figure.layout.tree ?? treeFromRows(figure);
+  const { boxes } = treeGeometry({ ...figure, layout: { ...figure.layout, tree } });
+  const gaps: TreeDock[] = [];
+  /** Records the space between sibling regions, including a gutter beside an entire nested column. */
+  const collect = (node: PanelTree): void => {
+    if (node.kind === "panel") return;
+    const parent = boxes.get(node.id);
+    for (let index = 1; index < node.children.length; index++) {
+      const before = node.children[index - 1], after = node.children[index];
+      const anchor = treePanelIds(before).filter((id) => !moving.has(id)).at(-1);
+      const next = treePanelIds(after).find((id) => !moving.has(id));
+      if (!anchor || !next) continue;
+      const first = boxes.get(before.id), second = boxes.get(after.id), horizontal = node.axis === "x";
+      const start = horizontal ? first.x + first.width : first.y + first.height;
+      const marker = horizontal ? { ...parent, x: start, width: second.x - start } : { ...parent, y: start, height: second.y - start };
+      gaps.push({ scope: "gap", anchor, next, side: horizontal ? "right" : "bottom", marker });
+    }
+    node.children.forEach(collect);
+  };
+  if (tree) collect(tree);
+  /** Chooses an explicit action; the previous local zone gets a few screen pixels of tolerance near a boundary. */
+  return (x: number, y: number, canvas?: Box, previous?: TreeDock, tolerance = 0): TreeDock | undefined => {
+    const bounds = canvas ?? { x: -16, y: -16, width: figure.width + 32, height: figure.height + 36 };
+    if (!available || !containsPoint(bounds, x, y)) return undefined;
+    const padding = figure.layout.padding;
+    if (x < padding || y < padding || x > page.width - padding || y > page.height - padding) {
+      const edges: [Edge, number][] = [["left", x], ["right", page.width - x], ["top", y], ["bottom", page.height - y]];
+      const side = canvas && (x < 0 || x > page.width) ? (x < 0 ? "left" : "right") : edges.reduce((a,b) => a[1] <= b[1] ? a : b)[0];
+      return { scope: "figure", anchor: available.id, side, marker: edgeStrip(page, side, .06) };
+    }
+    const panel = panels.find((item) => containsPoint(boxes.get(item.id), x, y));
+    if (!panel) return gaps.find((gap) => containsPoint(gap.marker, x, y));
+    if (moving.has(panel.id)) return undefined;
+    const box = boxes.get(panel.id), horizontal = (x - box.x) / box.width, vertical = Math.min(1, (y - box.y) / panel.height);
+    const distances: Record<Edge, number> = { left: horizontal, right: 1 - horizontal, top: vertical, bottom: 1 - vertical };
+    const nearest = (Object.keys(distances) as Edge[]).reduce((a, b) => distances[a] <= distances[b] ? a : b);
+    let side: Edge | "center" = distances[nearest] >= .25 ? "center" : nearest;
+    if (previous?.scope === "panel" && previous.anchor === panel.id) {
+      const hold = Math.min(.04, tolerance / Math.max(box.width, box.height));
+      if (previous.side === "center" && distances[nearest] >= .25 - hold) side = "center";
+      else if (previous.side !== "center" && distances[previous.side] <= Math.min(.25, distances[nearest]) + hold) side = previous.side;
+    }
+    if (side === "center" && moving.size !== 1) return undefined;
+    const marker = side === "center" ? box : edgeStrip(box, side, .32);
+    if (side === "bottom") { marker.y = box.y + panel.height * .68; marker.height = box.y + box.height - marker.y; }
+    return { scope: "panel", anchor: panel.id, side, marker };
+  };
+}
+
+/** Resolves one independent drop without keeping a gesture's geometry cache. */
 export function findTreeDock(figure: FigureDocument, moving: Set<string>, x: number, y: number, canvas?: Box): TreeDock | undefined {
-  const panels = figure.elements.filter((element): element is Panel => element.kind === "panel" && !moving.has(element.id));
-  const bounds = canvas ?? { x: -16, y: -16, width: figure.width + 32, height: figure.height + 36 };
-  // A4 whitespace belongs to the docking surface, even far below a short combination figure.
-  if (!panels.length || x < bounds.x || x > bounds.x + bounds.width || y < bounds.y || y > bounds.y + bounds.height) return undefined;
-  // Side whitespace spans the full paper height; its corners must not become top/bottom row targets.
-  if (canvas && (x < 0 || x > figure.width)) {
-    return { anchor: panels[0].id, side: x < 0 ? "left" : "right", scope: "figure" };
-  }
-  const panel = panels.reduce((nearest, candidate) => {
-    const distance = Math.hypot(Math.max(candidate.x - x, x - candidate.x - candidate.width, 0),
-      Math.max(candidate.y - y, y - candidate.y - elementHeight(candidate), 0));
-    const old = Math.hypot(Math.max(nearest.x - x, x - nearest.x - nearest.width, 0),
-      Math.max(nearest.y - y, y - nearest.y - elementHeight(nearest), 0));
-    return distance < old ? candidate : nearest;
-  });
-  const scope = x < figure.layout.padding || x > figure.width - figure.layout.padding
-    || y < figure.layout.padding || y > figure.height - figure.layout.padding ? "figure" : "panel";
-  // Outer direction uses the whole figure so nearby narrow panels cannot turn a bottom drop into a column.
-  const horizontal = scope === "figure" ? x / figure.width : (x - panel.x) / panel.width;
-  const vertical = scope === "figure" ? y / figure.height : (y - panel.y) / elementHeight(panel);
-  const sides: Array<{ side: TreeDock["side"]; distance: number }> = [
-    { side: "left", distance: horizontal }, { side: "right", distance: 1 - horizontal },
-    { side: "top", distance: vertical }, { side: "bottom", distance: 1 - vertical },
-  ];
-  const side = sides.sort((a, b) => a.distance - b.distance)[0].side;
-  return { anchor: panel.id, side, scope };
+  return prepareTreeDock(figure, moving)(x, y, canvas);
 }
 
 /** Inserts moved panels beside a leaf or the whole figure, preserving all unrelated nested splits. */
@@ -188,13 +231,28 @@ export function dockTreePanels(figure: FigureDocument, ids: Set<string>, target:
   const moving = treePanelIds(figure.layout.tree).filter((id) => ids.has(id));
   if (!moving.length || ids.has(target.anchor)) return;
   const remaining = new Set(treePanelIds(figure.layout.tree).filter((id) => !ids.has(id)));
-  let root = prune(figure.layout.tree, remaining);
+  const swap = target.side === "center";
+  let root = swap ? figure.layout.tree : prune(figure.layout.tree, remaining);
   if (!root) return;
   const axis = target.side === "left" || target.side === "right" ? "x" : "y";
   const before = target.side === "left" || target.side === "top";
   const inserted = split(axis, moving.map((id) => ({ kind: "panel", id })));
   /** Replaces the local leaf, flattening compatible automatic splits for natural side-by-side rows. */
   const insert = (node: PanelTree): PanelTree => {
+    if (swap) {
+      if (node.kind === "panel") return { ...node, id: node.id === moving[0] ? target.anchor : node.id === target.anchor ? moving[0] : node.id };
+      return { ...node, children: node.children.map(insert) };
+    }
+    if (target.scope === "gap") {
+      if (node.kind === "panel") return node;
+      const index = node.children.findIndex((child) => treePanelIds(child).includes(target.anchor));
+      if (node.axis === axis && index >= 0 && treePanelIds(node.children[index + 1]).includes(target.next)) {
+        node.children.splice(index + 1, 0, inserted);
+        if (node.weights) node.weights.splice(index + 1, 0, (node.weights[index] + node.weights[index + 1]) / 2);
+        return node;
+      }
+      return { ...node, children: node.children.map(insert) };
+    }
     if (node.id === target.anchor) return split(axis, before ? [inserted, node] : [node, inserted]);
     if (node.kind === "panel") return node;
     if (node.axis === axis && !node.weights && node.children.some((child) => child.id === target.anchor)) {

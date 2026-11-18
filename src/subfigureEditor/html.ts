@@ -30,14 +30,15 @@ export function buildSubfigureHtml(script: string, csp: string, icons = ""): str
   .selection{fill:none;stroke:#007acc;stroke-width:1;vector-effect:non-scaling-stroke;pointer-events:none}
   #board .divider{cursor:col-resize;fill:transparent;stroke:none}#board .divider-line{stroke:#888;stroke-width:1;stroke-dasharray:4 4;pointer-events:none;vector-effect:non-scaling-stroke}
   #board .divider.horizontal{cursor:row-resize}
-  .panel-tools{position:fixed;z-index:6;display:flex;gap:4px;padding:4px;background:var(--vscode-editorWidget-background,#252526);border:1px solid var(--vscode-widget-border,#666);border-radius:5px;box-shadow:0 2px 8px #0005}
+  .panel-tools{position:fixed;z-index:6;display:flex;flex-wrap:wrap;gap:4px;padding:4px;background:var(--vscode-editorWidget-background,#252526);border:1px solid var(--vscode-widget-border,#666);border-radius:5px;box-shadow:0 2px 8px #0005}
   .panel-tools button{display:inline-flex;gap:5px;align-items:center}
+  .crop-feedback{flex-basis:100%;max-width:320px}header .check{margin:0}
   #board .crop-frame{fill:transparent;stroke:white;stroke-width:1;vector-effect:non-scaling-stroke;cursor:move}
   #board .crop-handle{fill:none;stroke:#111;stroke-width:4;paint-order:stroke;pointer-events:none;vector-effect:non-scaling-stroke}
-  #board .drag-ghost{opacity:.75;pointer-events:none}#board.dragging{cursor:grabbing}#board.dragging [data-element-id]{cursor:grabbing}
+  #board .drag-ghost{opacity:.32;pointer-events:none}#board.dragging{cursor:grabbing}#board.dragging [data-element-id]{cursor:grabbing}
   #board .snap-guide{pointer-events:none}#board .snap-guide line{stroke:var(--vscode-focusBorder,#007acc);stroke-width:1;stroke-dasharray:3 3;vector-effect:non-scaling-stroke}
   #board .snap-guide text{fill:var(--vscode-focusBorder,#007acc);font:9px var(--vscode-font-family,system-ui);paint-order:stroke;stroke:white;stroke-width:3;stroke-linejoin:round}
-  .dock-preview{fill:#007acc33;stroke:#007acc;stroke-width:2;stroke-dasharray:6 3;pointer-events:none;vector-effect:non-scaling-stroke}
+  .dock-preview{fill:var(--vscode-list-dropBackground,#76baff);fill-opacity:.45;stroke:var(--vscode-focusBorder,#007acc);stroke-width:2;pointer-events:none;vector-effect:non-scaling-stroke}
   #drop-hint{position:absolute;top:10px;left:16px;right:16px;padding:7px 10px;z-index:4;pointer-events:none;background:var(--vscode-editorHoverWidget-background,#252526);border:1px solid var(--vscode-focusBorder,#007acc)}
   #drop-hint:empty{display:none}.presets{display:flex;gap:4px;flex-wrap:wrap;margin:10px 0}.presets button{padding:6px 7px}
   .layout-help{margin:8px 0 14px}details>summary{cursor:pointer;font-size:12px;margin:14px 0 10px}input:disabled{opacity:.6}
@@ -51,7 +52,8 @@ export function buildSubfigureHtml(script: string, csp: string, icons = ""): str
   </style></head><body>
   <header><span class="brand">${htmlMessage("Combination Figure")}</span>
   ${button("save", "Save")}${button("saveAs", "Save As")}${button("undo", "Undo")}${button("redo", "Redo")}<span class="separator"></span>
-  ${button("addImages", "Add images")}${button("addText", "Add text")}${button("arrange", "Auto arrange")}${button("renumber", "Renumber")}<span class="separator"></span>
+  ${button("addImages", "Add images")}${button("addText", "Add text")}${button("arrange", "Auto arrange")}${button("renumber", "Renumber")}
+  <label class="check" title="${htmlMessage("Automatically assign a, b, c… in visual order after edits. Turn off to keep custom labels.")}"><input id="auto-renumber" type="checkbox" checked>${htmlMessage("Auto renumber")}</label><span class="separator"></span>
   ${button("refresh", "Refresh images")}<input id="dpi" type="number" value="300" min="1" max="2400" style="width:65px" aria-label="${htmlMessage("PNG resolution (DPI)")}"><span>DPI</span>${button("export", "Export PNG")}</header>
   <main><aside><h2>${htmlMessage("Layout")}</h2><select id="layout-mode" aria-label="${htmlMessage("Layout mode")}"><option value="panels">${htmlMessage("Panel layout")}</option><option value="free">${htmlMessage("Free positioning")}</option></select>
   <p id="layout-help" class="muted layout-help"></p><div class="presets" aria-label="${htmlMessage("Layout presets")}">

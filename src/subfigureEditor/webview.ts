@@ -6,15 +6,15 @@
  * VS Code can manage native undo, dirty state, Save As and draft recovery.
  */
 import { A4, PT_PER_MM, createFigure, reflowFigure, resizeFigure, arrangePanels, alignElements,
-  elementHeight, visibleRatio, renumberPanels, newElementId, validateFigure,
+  elementHeight, visibleRatio, renumberPanels, autoRenumberPanels, newElementId, validateFigure,
   type FigureDocument, type FigureElement, type RichRun, type TextStyle, type Panel } from "./model";
 import { serializeFigure, renderElement, escapeXml, decimal } from "./svg";
 import type { EditorMessage, HostMessage } from "./protocol";
 import { panelRows, resizeRowPair, snapRowDivider, snapSelection, type DividerSnap, type AlignmentGuide } from "./layout";
 import { BUTTON_HELP, FORMAT_HELP } from "./help";
-import { dockTreePanels, findTreeDock, resizeTreeDivider, syncPanelTree, treeFromRows, treeGeometry,
+import { dockTreePanels, prepareTreeDock, resizeTreeDivider, syncPanelTree, treeFromRows, treeGeometry,
   nestedPanelPreset, type Box, type TreeDock, type TreeDivider } from "./panelTree";
-import { cropGeometry, cropFromFrame, dragCropFrame, panCropSource } from "./crop";
+import { cropGeometry, cropFromFrame, dragCropFrame, panCropSource, whitespaceCrop } from "./crop";
 
 declare function acquireVsCodeApi(): { postMessage(message: EditorMessage): void; getState(): unknown; setState(value: unknown): void };
 const vscode = acquireVsCodeApi();
@@ -36,11 +36,12 @@ let pointer: { start: DOMPoint; original: FigureDocument; mode: "move" | "resize
   ids: Set<string>; right?: string; target?: TreeDock; snap?: DividerSnap; guides?: AlignmentGuide[];
   split?: string; index?: number; treeSnap?: ReturnType<typeof resizeTreeDivider> } | undefined;
 let draggedId: string | undefined, editingText = false, textTimer: ReturnType<typeof setTimeout> | undefined;
-let dockPreview: FigureDocument | undefined;
-let dragGhost: SVGGElement | undefined, previewKey: string | undefined;
+let dockSession: { hit: ReturnType<typeof prepareTreeDock>; target?: TreeDock; bounds?: Box } | undefined;
+let dragGhost: SVGGElement | undefined;
 let moveFrame = 0, pendingMove: PointerEvent | undefined;
 let cropping: { id: string; original: FigureDocument; source: Box; frame: Box } | undefined;
 let cropPointer: { start: DOMPoint; handle: string; source: Box; frame: Box } | undefined;
+let cropAnalysis: object | undefined, cropFeedback = "";
 
 /** Treats older SVGs without a mode as free layouts, preserving their manually authored geometry. */
 function rowsMode(): boolean { return figure.layout.mode === "rows" || figure.layout.mode === "panels"; }
@@ -66,6 +67,7 @@ function selection(): FigureElement[] { return figure.elements.filter((element) 
 function commit(label: string, renderAll = true): void {
   try {
     if (figure.layout.tree || figure.layout.mode === "panels") syncPanelTree(figure);
+    if (autoRenumberPanels(figure) && rowsMode()) arrangePanels(figure, measureRun);
     validateFigure(figure); reflowFigure(figure, measureRun);
     if (JSON.stringify(figure) === JSON.stringify(lastValidFigure)) { if (renderAll) render(); return; }
     lastValidFigure = structuredClone(figure);
@@ -92,14 +94,13 @@ function canvasGeometry(document: FigureDocument): { marginX: number; marginY: n
 }
 
 /** Includes the full paper whitespace while preserving edge docking when the A4 reference is hidden. */
-function canvasDock(original: FigureDocument, ids: Set<string>, point: DOMPoint): TreeDock | undefined {
+function beginDock(original: FigureDocument, ids: Set<string>): void {
   const { marginX, marginY, width, height } = canvasGeometry(original);
-  return findTreeDock(original, ids, point.x, point.y, a4 ? { x: -marginX, y: -marginY, width, height } : undefined);
+  dockSession = { hit: prepareTreeDock(original, ids), bounds: a4 ? { x: -marginX, y: -marginY, width, height } : undefined };
 }
 
 /** Updates the canvas, A4 paper boundary, figure boundary and non-exported selection overlays. */
 function renderCanvas(): void {
-  previewKey = undefined;
   const { marginX, marginY, width, height } = canvasGeometry(figure);
   board.setAttribute("viewBox", `0 0 ${width} ${height}`);
   board.style.width = `${width * 96 / 72 * zoom}px`; board.style.height = `${height * 96 / 72 * zoom}px`;
@@ -109,7 +110,7 @@ function renderCanvas(): void {
     + `<g id="artwork">${figure.elements.map((element) => renderElement(element, imageSource)).join("")}</g>`
     + `<g id="overlays">${canvasOverlays(figure)}</g>`
     + `<g id="snap-overlays">${snapGuides(figure)}</g>`
-    + '<g id="crop-overlay"></g>'
+    + '<g id="crop-overlay"></g><g id="dock-marker" pointer-events="none"></g>'
     + (!figure.elements.length ? `<text class="empty" x="${figure.width / 2}" y="${figure.height / 2}" text-anchor="middle">${escapeXml(t("Drop images here or choose Add images"))}</text>` : "") + "</g>";
   const w = decimal(figure.width / PT_PER_MM), h = decimal(figure.height / PT_PER_MM);
   node("status").textContent = t("{0} × {1} mm · {2} elements", w, h, figure.elements.length);
@@ -125,8 +126,7 @@ function canvasOverlays(display: FigureDocument): string {
     + (rowsMode() && display.layout.mode === "panels" ? treeGeometry(display).dividers.map(treeDividerSvg).join("") : rowsMode() ? panelRows(display).flatMap((row) => row.slice(0, -1).map((left, index) => {
       const right = row[index + 1], x = (left.x + left.width + right.x) / 2, hitWidth = Math.max(6 / zoom, figure.layout.gap);
       return `<line class="divider-line" x1="${x}" x2="${x}" y1="${left.y}" y2="${left.y + left.height}"/><rect class="divider" data-divider="${escapeXml(left.id)}" data-right="${escapeXml(right.id)}" x="${x - hitWidth / 2}" y="${left.y}" width="${hitWidth}" height="${left.height}"><title>${escapeXml(t("Drag to resize adjacent panels. Snap to common divisions, equal widths or heights, and other rows. Hold Alt to bypass snapping."))}</title></rect>`;
-    })).join("") : "")
-    + (dockPreview ? display.elements.filter((element) => pointer?.ids.has(element.id) || element.id === draggedId).map((element) => `<rect class="dock-preview" x="${element.x}" y="${element.y}" width="${element.width}" height="${elementHeight(element)}"/>`).join("") : "");
+    })).join("") : "");
 }
 
 /** Draws a horizontal or vertical hit target for any nested split boundary. */
@@ -163,13 +163,19 @@ function positionPanelTools(): void {
   const mode = cropping ? "crop" : "select";
   if (tools.dataset.mode !== mode) {
     tools.dataset.mode = mode;
-    const actions = cropping ? [["cropDone", "Done", "check"], ["cropCancel", "Cancel", "close"], ["cropReset", "Reset crop", "discard"]]
-      : [["crop", "Crop image", "crop"]];
-    tools.innerHTML = actions.map(([action, label, icon]) => `<button data-action="${action}" title="${escapeXml(t(BUTTON_HELP[action]))}"><span class="codicon codicon-${icon}" aria-hidden="true"></span>${escapeXml(t(label))}</button>`).join("");
+    const actions = cropping ? [["cropDone", "Done", "check"], ["cropCancel", "Cancel", "close"],
+      ["cropAuto", "Trim whitespace", "wand"], ["cropReset", "Reset crop", "discard"]]
+      : [["crop", "Crop image", "crop"], ["cropAuto", "Trim whitespace", "wand"]];
+    tools.innerHTML = actions.map(([action, label, icon]) => `<button data-action="${action}" title="${escapeXml(t(BUTTON_HELP[action]))}"><span class="codicon codicon-${icon}" aria-hidden="true"></span>${escapeXml(t(label))}</button>`).join("")
+      + (cropping ? '<span class="muted crop-feedback" role="status"></span>' : "");
   }
+  tools.querySelector<HTMLButtonElement>("[data-action=cropAuto]").disabled = Boolean(cropAnalysis);
+  const feedback = tools.querySelector(".crop-feedback");
+  if (feedback) { feedback.textContent = cropFeedback; feedback.classList.toggle("hidden", !cropFeedback); }
   tools.classList.remove("hidden");
   const box = cropping?.frame ?? panel, group = document.getElementById("figure-group") as unknown as SVGGraphicsElement;
   const point = new DOMPoint(box.x + box.width / 2, box.y).matrixTransform(group.getScreenCTM()), bounds = viewport.getBoundingClientRect();
+  tools.style.maxWidth = `${bounds.width - 12}px`;
   tools.style.left = `${Math.max(bounds.left + 6, Math.min(bounds.right - tools.offsetWidth - 6, point.x - tools.offsetWidth / 2))}px`;
   tools.style.top = `${Math.max(bounds.top + 6, Math.min(bounds.bottom - tools.offsetHeight - 6, point.y - tools.offsetHeight - 8))}px`;
 }
@@ -180,8 +186,42 @@ function beginCrop(): void {
   const panel = selection()[0];
   if (selection().length !== 1 || panel?.kind !== "panel") return;
   const geometry = cropGeometry(panel);
+  cropAnalysis = undefined; cropFeedback = "";
   cropping = { id: panel.id, original: structuredClone(figure), source: geometry.source, frame: geometry.frame };
   board.focus(); renderCrop();
+}
+
+/** Analyzes a bounded raster preview of the original source and proposes a reversible crop in the current session. */
+async function trimWhitespace(): Promise<void> {
+  if (!cropping) beginCrop();
+  if (!cropping || cropAnalysis) return;
+  const session = cropping, request = {}, panel = session.original.elements.find((element) => element.id === session.id) as Panel;
+  cropAnalysis = request; cropFeedback = t("Detecting outer whitespace…"); positionPanelTools();
+  try {
+    const source = sources[panel.source] ?? (panel.source.startsWith("data:") ? panel.source : undefined);
+    if (!source) throw new Error(t("The source image is unavailable. Refresh images and try again."));
+    const image = new Image(); image.src = source; await image.decode();
+    if (cropping !== session || cropAnalysis !== request) return;
+    const scale = Math.min(source.startsWith("data:image/svg+xml") ? Infinity : 1, 2048 / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale)); canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const crop = whitespaceCrop(context.getImageData(0, 0, canvas.width, canvas.height));
+    if (crop) {
+      const bounds = session.source;
+      session.frame = { x: bounds.x + bounds.width * crop.left / 100, y: bounds.y + bounds.height * crop.top / 100,
+        width: bounds.width * (100 - crop.left - crop.right) / 100, height: bounds.height * (100 - crop.top - crop.bottom) / 100 };
+      cropFeedback = t("Whitespace crop is ready. Choose Done to apply."); renderCrop();
+    } else cropFeedback = t("No outer whitespace detected; crop unchanged.");
+  } catch (error) {
+    if (cropping === session && cropAnalysis === request) {
+      cropFeedback = ""; notice(t("Could not detect whitespace: {0}", error instanceof Error ? error.message : String(error)));
+    }
+  } finally {
+    // Cancel, reset and manual gestures invalidate pending image decoding so stale results cannot replace newer work.
+    if (cropAnalysis === request) { cropAnalysis = undefined; positionPanelTools(); }
+  }
 }
 
 /** Draws the full source once, then updates only its bounds, shading and crop handles during gestures. */
@@ -214,6 +254,7 @@ function renderCrop(): void {
 
 /** Adjusts crop edges or pans the image while retaining its decoded SVG image node. */
 function moveCrop(event: PointerEvent): void {
+  cropAnalysis = undefined; cropFeedback = "";
   const point = figurePoint(event), dx = point.x - cropPointer.start.x, dy = point.y - cropPointer.start.y;
   if (cropPointer.handle === "pan") cropping.source = panCropSource(cropPointer.source, cropPointer.frame, dx, dy);
   else cropping.frame = dragCropFrame(cropPointer.source, cropPointer.frame, cropPointer.handle, dx, dy, 8 / (zoom * 96 / 72));
@@ -225,7 +266,7 @@ function finishCrop(): void {
   if (!cropping) return;
   if (pendingMove && cropPointer) flushPointerMove();
   const session = cropping, crop = cropFromFrame(session.source, session.frame);
-  cropping = undefined; cropPointer = undefined;
+  cropping = undefined; cropPointer = undefined; cropAnalysis = undefined; cropFeedback = "";
   figure = structuredClone(session.original);
   const panel = figure.elements.find((element) => element.id === session.id) as Panel;
   const changed = (Object.keys(crop) as Array<keyof typeof crop>).some((key) => Math.abs(crop[key] - panel.crop[key]) > .000001);
@@ -241,7 +282,7 @@ function cancelCrop(): void {
   if (!cropping) return;
   if (moveFrame) cancelAnimationFrame(moveFrame);
   moveFrame = 0; pendingMove = undefined;
-  cropping = undefined; cropPointer = undefined; render();
+  cropping = undefined; cropPointer = undefined; cropAnalysis = undefined; cropFeedback = ""; render();
 }
 
 viewport.addEventListener("scroll", positionPanelTools);
@@ -300,7 +341,7 @@ function render(): void {
     button.disabled = figure.elements.filter((element) => element.kind === "panel").length < 3;
   }
   node("layout-help").textContent = t(rowsMode()
-    ? "Drop on a panel's left, right, top or bottom to split that region. Drop in the surrounding paper whitespace or at the figure's outer edge to add a whole row or column."
+    ? "Centre: swap two panels. Edge: place beside a panel. Gap: insert between regions. Paper margin: add a whole row or column."
     : "Drag to move freely; use corner handles to resize. Switch to Panel layout to organise panels by docking.");
   for (const button of document.querySelectorAll<HTMLButtonElement>("[data-action^='align:']")) {
     button.disabled = selection().length < 2 || rowsMode() && selection().some((element) => element.kind === "panel");
@@ -308,6 +349,7 @@ function render(): void {
   setValue("figure-width", Number((figure.width / unitPoints()).toFixed(2)));
   setValue("figure-height", Number((figure.height / unitPoints()).toFixed(2)));
   setValue("auto-height", figure.autoHeight); setValue("transparent", figure.background === "transparent"); setValue("embedded", figure.embedded);
+  setValue("auto-renumber", figure.autoRenumber !== false);
   setValue("columns", figure.layout.columns); setValue("gap", figure.layout.gap); setValue("row-gap", figure.layout.rowGap); setValue("padding", figure.layout.padding);
   setValue("rows", figure.layout.rows.join(", ")); setValue("weights", figure.layout.weights.join(", "));
   setValue("default-family", figure.font.family); setValue("default-size", figure.font.size);
@@ -317,7 +359,10 @@ function render(): void {
 /** Creates a safely escaped inspector field for one physical element property. */
 function field(label: string, key: string, value: string | number, type = "number"): string {
   const locked = rowsMode() && selection()[0]?.kind === "panel" && ["x", "y", "width", "height"].includes(key);
-  return `<label class="field"><span>${escapeXml(t(label))}</span><input data-property="${key}" type="${type}" value="${escapeXml(String(value))}"${type === "number" ? ' step=".5"' : ""}${locked ? ` disabled title="${escapeXml(t("Panel layout controls this geometry. Drag dividers, or switch to Free positioning for individual sizes."))}"` : ""}></label>`;
+  const automatic = key === "label" && figure.autoRenumber !== false;
+  const reason = automatic ? "Turn off Auto renumber to edit this label."
+    : locked ? "Panel layout controls this geometry. Drag dividers, or switch to Free positioning for individual sizes." : "";
+  return `<label class="field"><span>${escapeXml(t(label))}</span><input data-property="${key}" type="${type}" value="${escapeXml(String(value))}"${type === "number" ? ' step=".5"' : ""}${reason ? ` disabled title="${escapeXml(t(reason))}"` : ""}></label>`;
 }
 
 /** Converts stored rich runs into a controlled editable fragment, never arbitrary SVG markup. */
@@ -384,12 +429,19 @@ function flushText(): void {
 }
 
 /** Selects an element without renumbering it or altering its source order. */
-function select(id?: string, additive = false): void {
+function select(id?: string, additive = false, retainArtwork = false): void {
   if (cropping) finishCrop();
   flushText(); editingText = false;
   if (!additive) selected.clear();
   if (id) { if (additive && selected.has(id)) selected.delete(id); else selected.add(id); }
-  render();
+  if (retainArtwork) {
+    document.getElementById("overlays").innerHTML = canvasOverlays(figure);
+    for (const item of document.querySelectorAll<HTMLElement>("[data-select]")) item.classList.toggle("selected", selected.has(item.dataset.select));
+    for (const button of document.querySelectorAll<HTMLButtonElement>("[data-action^='align:']")) {
+      button.disabled = selection().length < 2 || rowsMode() && selection().some((element) => element.kind === "panel");
+    }
+    renderInspector(); positionPanelTools();
+  } else render();
 }
 
 /** Converts screen coordinates through zoom and the A4 reference into figure points. */
@@ -398,21 +450,25 @@ function figurePoint(event: { clientX: number; clientY: number }): DOMPoint {
   return new DOMPoint(event.clientX, event.clientY).matrixTransform(group.getScreenCTM().inverse());
 }
 
-/** Shows the full resulting arrangement while keeping the committed figure and native history untouched. */
-function previewDock(original: FigureDocument, ids: Set<string>, target?: TreeDock): void {
-  const key = target ? `${target.scope}:${target.anchor}:${target.side}` : "";
-  if (key === previewKey) return;
-  previewKey = key;
-  dockPreview = target ? structuredClone(original) : undefined;
-  if (dockPreview) dockTreePanels(dockPreview, ids, target, measureRun);
+/** Marks the chosen region on stationary artwork; reflow happens only when the displayed operation is released. */
+function previewDock(point: DOMPoint): TreeDock | undefined {
+  const previous = dockSession.target, target = dockSession.hit(point.x, point.y, dockSession.bounds, previous, 4 / (zoom * 96 / 72));
+  if (previous?.scope === target?.scope && previous?.anchor === target?.anchor && previous?.side === target?.side
+    && (target?.scope !== "gap" || previous?.scope === "gap" && previous.next === target.next)) return previous;
+  dockSession.target = target;
+  const marker = document.getElementById("dock-marker"), hint = node("drop-hint");
+  if (!target) { marker.replaceChildren(); hint.textContent = ""; return; }
+  const box = target.marker;
+  marker.innerHTML = `<rect class="dock-preview" x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}"/>`;
   const outerHints = { left: "Release to add a column to the left of the whole layout.",
     right: "Release to add a column to the right of the whole layout.",
     top: "Release to add a row above the whole layout.", bottom: "Release to add a row below the whole layout." };
-  node("drop-hint").textContent = target ? t(target.scope === "figure" ? outerHints[target.side] : "Release to split this panel region.") : "";
-  patchCanvas(dockPreview ?? original);
-  if (pointer?.mode === "dock") for (const element of document.querySelectorAll<SVGElement>("#artwork > [data-element-id]")) {
-    if (ids.has(element.dataset.elementId)) element.style.opacity = ".25";
-  }
+  const localHints = { center: "Swap positions with {0}.", left: "Place to the left of {0}.", right: "Place to the right of {0}.",
+    top: "Place above {0}.", bottom: "Place below {0}." };
+  const anchor = figure.elements.find((item) => item.id === target.anchor) as Panel;
+  hint.textContent = target.scope === "figure" ? t(outerHints[target.side]) : target.scope === "gap"
+    ? t(target.side === "right" ? "Insert between these columns." : "Insert between these rows.") : t(localHints[target.side], anchor.name);
+  return target;
 }
 
 /** Creates one follow-pointer copy, including the attached labels and captions. */
@@ -421,10 +477,12 @@ function startDragGhost(): void {
   dragGhost.classList.add("drag-ghost");
   for (const element of document.querySelectorAll<SVGElement>("#artwork > [data-element-id]")) {
     if (!pointer.ids.has(element.dataset.elementId)) continue;
-    const copy = element.cloneNode(true) as SVGElement;
-    copy.removeAttribute("data-element-id"); dragGhost.appendChild(copy);
+    const reference = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    element.id ||= `dock-source-${newElementId()}`;
+    reference.setAttribute("href", `#${element.id}`);
+    dragGhost.appendChild(reference);
   }
-  document.getElementById("figure-group").appendChild(dragGhost);
+  document.getElementById("figure-group").insertBefore(dragGhost, document.getElementById("dock-marker"));
 }
 
 /** Coalesces mouse events to the display refresh rate, using the most recent position. */
@@ -446,14 +504,17 @@ function flushPointerMove(): void {
 function clearDrag(): void {
   if (moveFrame) cancelAnimationFrame(moveFrame);
   moveFrame = 0; pendingMove = undefined;
-  dragGhost?.remove(); dragGhost = undefined; previewKey = undefined; dockPreview = undefined;
+  dragGhost?.remove(); dragGhost = undefined; dockSession = undefined;
+  document.getElementById("dock-marker").replaceChildren();
   pointer = undefined; board.classList.remove("dragging"); node("drop-hint").textContent = "";
 }
 
 /** Restores the pre-drag figure when the pointer is cancelled or Escape is pressed. */
 function cancelDrag(): void {
   if (!pointer) return;
-  figure = pointer.original; clearDrag(); render();
+  const stationary = pointer.mode === "dock";
+  figure = pointer.original; clearDrag();
+  if (stationary) positionPanelTools(); else render();
 }
 
 /** Moves all selected elements or resizes one panel while leaving type size unchanged. */
@@ -464,13 +525,12 @@ function pointerMove(event: PointerEvent): void {
   if (Math.hypot(dx, dy) < threshold && !pointer.moved) return;
   if (!pointer.moved) {
     board.classList.add("dragging");
-    if (pointer.mode === "dock") startDragGhost();
+    if (pointer.mode === "dock") { beginDock(pointer.original, pointer.ids); startDragGhost(); }
   }
   pointer.moved = true;
   if (pointer.mode === "dock") {
     dragGhost.setAttribute("transform", `translate(${dx} ${dy})`);
-    pointer.target = canvasDock(pointer.original, pointer.ids, point);
-    previewDock(pointer.original, pointer.ids, pointer.target);
+    pointer.target = previewDock(point);
     return;
   }
   if (pointer.mode === "divider") {
@@ -517,9 +577,11 @@ function pointerEnd(event: PointerEvent): void {
   if (!pointer) return;
   pendingMove = event; flushPointerMove();
   const moved = pointer.moved, mode = pointer.mode;
-  if (mode === "dock") figure = dockPreview ?? pointer.original;
+  const target = pointer.target;
+  if (mode === "dock" && target) dockTreePanels(figure, pointer.ids, target, measureRun);
   clearDrag();
-  if (moved) commit(mode === "dock" ? "Reorganise panel rows" : mode === "divider" ? "Resize row panels" : "Move or resize elements");
+  if (moved && (mode !== "dock" || target)) commit(mode === "dock" ? "Reorganise panel rows" : mode === "divider" ? "Resize row panels" : "Move or resize elements");
+  else if (mode === "dock") positionPanelTools();
   else renderCanvas();
 }
 
@@ -539,11 +601,11 @@ board.addEventListener("pointerdown", (event) => {
     ? selection().find((element) => element.kind === "panel")?.id ?? figure.elements.find((element) => element.kind === "panel")?.id : undefined)
     ?? resize ?? target.closest("[data-element-id]")?.getAttribute("data-element-id");
   if (!id) { select(); return; }
-  if (!selected.has(id) || event.shiftKey) select(id, event.shiftKey);
+  if (!selected.has(id) || event.shiftKey) select(id, event.shiftKey, true);
   if (!selected.has(id)) return;
-  event.preventDefault(); board.focus(); board.setPointerCapture(event.pointerId);
+  event.preventDefault(); board.focus({ preventScroll: true }); board.setPointerCapture(event.pointerId);
   const mode = divider ? "divider" : resize ? "resize" : rowsMode() && selection().every((item) => item.kind === "panel") ? "dock" : "move";
-  pointer = { start: figurePoint(event), original: structuredClone(figure), mode, id, moved: false, ids: new Set(selected), right: divider?.dataset.right,
+  pointer = { start: figurePoint(event), original: mode === "dock" ? figure : structuredClone(figure), mode, id, moved: false, ids: new Set(selected), right: divider?.dataset.right,
     split: divider?.dataset.split, index: Number(divider?.dataset.index) };
   node("panel-tools").classList.add("hidden");
 });
@@ -557,9 +619,10 @@ board.addEventListener("pointercancel", () => {
 /** Executes a toolbar operation without hiding the current physical layout. */
 function action(name: string): void {
   if (name === "crop") { beginCrop(); return; }
+  if (name === "cropAuto") { void trimWhitespace(); return; }
   if (name === "cropDone") { finishCrop(); return; }
   if (name === "cropCancel") { cancelCrop(); return; }
-  if (name === "cropReset") { if (cropping) { cropping.frame = { ...cropping.source }; renderCrop(); } return; }
+  if (name === "cropReset") { if (cropping) { cropAnalysis = undefined; cropFeedback = ""; cropping.frame = { ...cropping.source }; renderCrop(); } return; }
   if (cropping) finishCrop();
   flushText(); editingText = false;
   // Moving focus off a toolbar button prevents browser text history from intercepting figure undo.
@@ -653,6 +716,7 @@ document.addEventListener("change", (event) => {
   if (id === "a4") { a4 = (input as HTMLInputElement).checked; render(); fitCanvas(); return; }
   if (id === "zoom") { setZoom(Number(input.value) / 100); return; }
   if (id === "snap") return;
+  if (id === "auto-renumber") { figure.autoRenumber = (input as HTMLInputElement).checked; commit("Change automatic numbering"); return; }
   if (id === "layout-mode") {
     figure.layout.mode = input.value as "panels" | "free";
     if (rowsMode()) arrangePanels(figure, measureRun);
@@ -685,7 +749,9 @@ document.addEventListener("keydown", (event) => {
   const target = event.target as HTMLElement, input = target.closest("input,textarea,select,[contenteditable=true]");
   const modifier = event.ctrlKey || event.metaKey;
   if (modifier && ["s", "z", "y"].includes(event.key.toLowerCase()) && (!input || event.key.toLowerCase() === "s")) {
-    event.preventDefault(); action(event.key.toLowerCase() === "s" ? event.shiftKey ? "saveAs" : "save" : event.key.toLowerCase() === "y" || event.shiftKey ? "redo" : "undo"); return;
+    // The host forwards bubbling Webview keydowns even when defaultPrevented; send each handled command only once.
+    event.preventDefault(); event.stopPropagation();
+    action(event.key.toLowerCase() === "s" ? event.shiftKey ? "saveAs" : "save" : event.key.toLowerCase() === "y" || event.shiftKey ? "redo" : "undo"); return;
   }
   if (input) return;
   if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); action("delete"); }
@@ -712,41 +778,45 @@ document.addEventListener("keydown", (event) => {
 });
 
 node("elements").addEventListener("dragstart", (event) => {
-  previewKey = undefined;
   draggedId = (event.target as Element).closest<HTMLElement>("[data-select]")?.dataset.select;
+  if (rowsMode() && figure.elements.some((item) => item.id === draggedId && item.kind === "panel")) beginDock(figure, new Set([draggedId]));
   event.dataTransfer.setData("text/plain", draggedId ?? "");
 });
 node("elements").addEventListener("dragover", (event) => event.preventDefault());
-node("elements").addEventListener("dragend", () => { draggedId = undefined; dockPreview = undefined; node("drop-hint").textContent = ""; renderCanvas(); });
+node("elements").addEventListener("dragend", endListDock);
+/** Clears native list feedback even when a successful commit has removed the original HTML drag source. */
+function endListDock(): void {
+  draggedId = undefined; dockSession = undefined; document.getElementById("dock-marker").replaceChildren(); node("drop-hint").textContent = "";
+}
 node("elements").addEventListener("drop", (event) => {
   event.preventDefault(); event.stopPropagation();
   const id = (event.target as Element).closest<HTMLElement>("[data-select]")?.dataset.select;
   if (!draggedId || !id || draggedId === id) return;
   if (rowsMode() && figure.elements.find((element) => element.id === draggedId)?.kind === "panel" && figure.elements.find((element) => element.id === id)?.kind === "panel") {
     dockTreePanels(figure, new Set([draggedId]), { anchor: id, side: "left", scope: "panel" }, measureRun);
-    draggedId = undefined; commit("Reorganise panel rows"); return;
+    endListDock(); commit("Reorganise panel rows"); return;
   }
   const index = figure.elements.findIndex((item) => item.id === draggedId), target = figure.elements.findIndex((item) => item.id === id);
   const [element] = figure.elements.splice(index, 1); figure.elements.splice(target, 0, element);
-  draggedId = undefined; commit("Reorder elements");
+  endListDock(); commit("Reorder elements");
 });
 viewport.addEventListener("dragover", (event) => {
   event.preventDefault(); event.dataTransfer.dropEffect = draggedId ? "move" : "copy";
-  if (!draggedId || !rowsMode() || figure.elements.find((element) => element.id === draggedId)?.kind !== "panel") return;
-  const point = figurePoint(event), ids = new Set([draggedId]);
-  previewDock(figure, ids, canvasDock(figure, ids, point));
+  if (draggedId && dockSession) previewDock(figurePoint(event));
 });
 viewport.addEventListener("dragleave", (event) => {
   const bounds = viewport.getBoundingClientRect();
   if (event.clientX >= bounds.left && event.clientX <= bounds.right && event.clientY >= bounds.top && event.clientY <= bounds.bottom) return;
   if (event.relatedTarget instanceof Node && viewport.contains(event.relatedTarget)) return;
-  dockPreview = undefined; node("drop-hint").textContent = ""; renderCanvas();
+  if (draggedId && dockSession) { dockSession.target = undefined; document.getElementById("dock-marker").replaceChildren(); node("drop-hint").textContent = ""; }
 });
 viewport.addEventListener("drop", async (event) => {
   event.preventDefault();
   if (draggedId) {
-    if (dockPreview) { figure = dockPreview; dockPreview = undefined; node("drop-hint").textContent = ""; commit("Reorganise panel rows"); }
-    draggedId = undefined; return;
+    const target = dockSession && previewDock(figurePoint(event)), ids = new Set([draggedId]);
+    endListDock();
+    if (target) { dockTreePanels(figure, ids, target, measureRun); commit("Reorganise panel rows"); }
+    return;
   }
   const uriList = event.dataTransfer.getData("text/uri-list");
   if (uriList) { vscode.postMessage({ type: "drop", paths: uriList.split(/\r?\n/).filter((line) => line && !line.startsWith("#")) }); return; }
@@ -834,10 +904,11 @@ window.addEventListener("message", async (event: MessageEvent<HostMessage>) => {
     }
     sources = message.sources;
     // A same-revision acknowledgement may arrive after pointerdown; leave its retained nodes intact.
-    if (same && pointer) return;
+    if (same && (pointer || draggedId)) return;
     if (same && cropping) return;
     if (!same) {
-      cropping = undefined; cropPointer = undefined;
+      if (draggedId) endListDock();
+      cropping = undefined; cropPointer = undefined; cropAnalysis = undefined; cropFeedback = "";
       if (pointer) clearDrag();
       figure = message.figure; lastValidFigure = structuredClone(figure); revision = message.revision;
       selected = new Set([...selected].filter((id) => figure.elements.some((element) => element.id === id)));

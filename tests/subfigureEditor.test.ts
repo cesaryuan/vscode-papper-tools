@@ -4,8 +4,9 @@ import test from "node:test";
 import { mkdtemp, writeFile, mkdir, rm } from "node:fs/promises";
 import * as path from "node:path";
 import { tmpdir } from "node:os";
+import { pathToFileURL } from "node:url";
 import { DOMParser, type Element } from "@xmldom/xmldom";
-import { A4, PT_PER_MM, createFigure, createPanel, arrangePanels, resizeFigure, reflowFigure, renumberPanels, validateFigure, visibleRatio, type Panel } from "../src/subfigureEditor/model";
+import { A4, PT_PER_MM, createFigure, createPanel, arrangePanels, resizeFigure, reflowFigure, renumberPanels, autoRenumberPanels, validateFigure, visibleRatio, type Panel } from "../src/subfigureEditor/model";
 import { serializeFigure } from "../src/subfigureEditor/svg";
 import { parseFigureSvg } from "../src/subfigureEditor/document";
 import { importMarkdownGroup, conversionEdits } from "../src/subfigureEditor/markdown";
@@ -14,7 +15,7 @@ import { setPngDpi } from "../src/subfigureEditor/png";
 import { SourceModuleFixture } from "./helpers/sourceModule";
 import { dockPanels, findDockTarget, panelRows, resizeRowPair, snapRowDivider, snapSelection } from "../src/subfigureEditor/layout";
 import { dockTreePanels, findTreeDock, nestedPanelPreset, resizeTreeDivider, syncPanelTree, treeGeometry, treePanelIds } from "../src/subfigureEditor/panelTree";
-import { cropFromFrame, cropGeometry, dragCropFrame, panCropSource } from "../src/subfigureEditor/crop";
+import { cropFromFrame, cropGeometry, dragCropFrame, panCropSource, whitespaceCrop } from "../src/subfigureEditor/crop";
 
 /** Applies independent source edits using their original UTF-16 offsets. */
 function apply(text: string, edits: Array<{ start: number; end: number; text: string }>): string {
@@ -127,7 +128,7 @@ test("conversion preserves prose punctuation around bare, bracketed and parenthe
   assert(converted.endsWith('Literal: `@fig:subfigure-a`; escaped: \\@fig:subfigure-b'));
 });
 
-test("subfigure hover targets its source document and group from images, containers and citations", () => {
+test("subfigure hover targets its source document and group from images, containers and citations", async () => {
   const fixture = new SourceModuleFixture({ vscode: {
     MarkdownString: class { value = ""; isTrusted: unknown;
       /** Retains hover Markdown for checking the actual clickable editing action. */
@@ -142,7 +143,7 @@ test("subfigure hover targets its source document and group from images, contain
     const group = findHoveredGroup(text, offset);
     assert.equal(group?.parent, "fig:group");
     const document = { getText: () => text, offsetAt: () => offset, uri: { scheme: "file", toString: () => "file:///different/manuscript.md" }, version: 7, lineAt: () => ({ range: {} }) };
-    const hover = new SubfigureHoverProvider("convert.test").provideHover(document as never, { line: 0 } as never);
+    const hover = await new SubfigureHoverProvider("convert.test", "edit.test").provideHover(document as never, { line: 0 } as never);
     const markdown = hover.contents as unknown as { value: string; isTrusted: unknown };
     assert.deepEqual(markdown.isTrusted, { enabledCommands: ["convert.test"] });
     const args = JSON.parse(decodeURIComponent(markdown.value.match(/command:convert.test\?([^)]*)/)[1]));
@@ -150,6 +151,62 @@ test("subfigure hover targets its source document and group from images, contain
   }
   assert.equal(findHoveredGroup(text, text.indexOf("Ordinary")), undefined);
   assert.equal(findHoveredGroup(text, text.lastIndexOf("@fig:a")), undefined);
+});
+
+test("standalone SVG image hovers open only actual combination files and notice when their metadata changes", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "papper-hover-"));
+  try {
+    const filename = path.join(directory, "组合图 example.svg"), manuscript = path.join(directory, "manuscript.md");
+    const fixture = new SourceModuleFixture({ vscode: {
+      MarkdownString: class { value = ""; isTrusted: unknown;
+        /** Captures the actionable Markdown emitted to the user. */
+        appendMarkdown(text: string) { this.value += text; } },
+      Hover: class {
+        /** Keeps the hover's public body and target range available for assertions. */
+        constructor(public contents: unknown, public range: unknown) {} },
+      Range: class {
+        /** Represents the real image token's source span. */
+        constructor(public startLine: number, public startCharacter: number, public endLine: number, public endCharacter: number) {} },
+      Uri: { file: (value: string) => ({ toString: () => pathToFileURL(value).toString() }) },
+    } });
+    const { SubfigureHoverProvider } = fixture.load<typeof import("../src/subfigureEditor/hover")>("src/subfigureEditor/hover.ts");
+    const provider = new SubfigureHoverProvider("convert.test", "edit.test");
+    let text = "![Combined plot](<组合图%20example.svg>){#fig:combined}";
+    const document = { getText: () => text, offsetAt: (position: { character: number }) => position.character,
+      uri: { scheme: "file", fsPath: manuscript, toString: () => pathToFileURL(manuscript).toString() },
+      version: 1, lineAt: () => ({ text, range: {} }) };
+    await writeFile(filename, serializeFigure(sample()));
+    const hover = await provider.provideHover(document as never, { line: 0, character: 5 } as never);
+    const markdown = hover.contents as unknown as { value: string; isTrusted: unknown };
+    assert.deepEqual(markdown.isTrusted, { enabledCommands: ["edit.test"] });
+    assert.deepEqual(JSON.parse(decodeURIComponent(markdown.value.match(/command:edit.test\?([^)]*)/)[1])), [pathToFileURL(filename).toString()]);
+    await writeFile(filename, '<svg xmlns="http://www.w3.org/2000/svg"><text>ordinary SVG</text></svg>');
+    assert.equal(await provider.provideHover(document as never, { line: 0, character: 5 } as never), undefined);
+    await writeFile(filename, '<svg xmlns="http://www.w3.org/2000/svg"><metadata id="papper-subfigure">{"format":"invalid"}</metadata></svg>');
+    assert.equal(await provider.provideHover(document as never, { line: 0, character: 5 } as never), undefined);
+    text = "![Missing](missing.svg)";
+    assert.equal(await provider.provideHover(document as never, { line: 0, character: 5 } as never), undefined);
+    text = "![Remote](https://example.com/combined.svg)";
+    assert.equal(await provider.provideHover(document as never, { line: 0, character: 5 } as never), undefined);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("automatic numbering follows edited visual positions and disabling it preserves custom labels after reopening", () => {
+  const figure = sample(), panels = figure.elements as Panel[], moved = panels[0];
+  moved.y = 2000;
+  assert(autoRenumberPanels(figure));
+  assert.equal(moved.label, "e"); assert.equal(panels[1].label, "a");
+  assert.equal(autoRenumberPanels(figure), false);
+  figure.autoRenumber = false; moved.label = "Custom";
+  moved.y = 0; assert.equal(autoRenumberPanels(figure), false);
+  const restored = parseFigureSvg(serializeFigure(figure));
+  assert.equal(restored.autoRenumber, false); assert.equal((restored.elements[0] as Panel).label, "Custom");
+  renumberPanels(restored);
+  assert.equal((restored.elements[0] as Panel).label, "a");
+  restored.autoRenumber = true;
+  (restored.elements[1] as Panel).label = "Manual";
+  assert(autoRenumberPanels(restored));
+  assert.equal((restored.elements[1] as Panel).label, "b");
 });
 
 test("Save As rebases links and embedded assets round-trip without changing image bytes", async () => {
@@ -396,6 +453,33 @@ test("four-sided local docking creates nested splits and deleting or adding pane
   validateFigure(figure);
 });
 
+test("dropping on a panel centre exchanges only the two slots; dragging home or multi-dragging to a centre has no target", () => {
+  const figure = sample(); nestedPanelPreset(figure, 1); arrangePanels(figure);
+  const [left, upper, lower] = figure.elements as Panel[], moving = new Set([left.id]);
+  const centreX = upper.x + upper.width / 2, centreY = upper.y + upper.height / 2;
+  assert.equal(findTreeDock(figure, moving, left.x + left.width / 2, left.y + left.height / 2), undefined);
+  assert.equal(findTreeDock(figure, new Set([left.id, lower.id]), centreX, centreY), undefined);
+  const target = findTreeDock(figure, moving, centreX, centreY), before = treePanelIds(figure.layout.tree);
+  assert.equal(target?.side, "center");
+  dockTreePanels(figure, moving, target);
+  assert.deepEqual(treePanelIds(figure.layout.tree), before.map((id) => id === left.id ? upper.id : id === upper.id ? left.id : id));
+  assert.equal(left.x, lower.x); assert(upper.x < left.x); assert(left.y < lower.y);
+  validateFigure(parseFigureSvg(serializeFigure(figure)));
+});
+
+test("the full gutter beside a stacked column inserts a sibling column, not a panel inside the stack", () => {
+  const figure = sample(); nestedPanelPreset(figure, 1); arrangePanels(figure);
+  const [left, upper, lower, moving] = figure.elements as Panel[], ids = new Set([moving.id]);
+  const gutter = (left.x + left.width + upper.x) / 2;
+  const nearTop = findTreeDock(figure, ids, gutter, upper.y + upper.height / 2);
+  const nearBottom = findTreeDock(figure, ids, gutter, lower.y + lower.height / 2);
+  assert.equal(nearBottom?.scope, "gap"); assert.deepEqual(nearBottom, nearTop);
+  dockTreePanels(figure, ids, nearBottom);
+  assert.equal(upper.x, lower.x); assert(left.x < moving.x && moving.x < lower.x);
+  assert.equal(left.y, moving.y); assert.equal(moving.y, upper.y); assert(lower.y > upper.y);
+  validateFigure(parseFigureSvg(serializeFigure(figure)));
+});
+
 test("A4 whitespace docks whole rows and columns, including the paper bottom, while rejecting off-paper drops", () => {
   const original = sample(); original.layout.rows = [5]; original.layout.weights = []; arrangePanels(original);
   const marginX = (A4.width - original.width) / 2, marginY = 22 * PT_PER_MM;
@@ -461,4 +545,57 @@ test("interactive crop frames round-trip existing crops and preserve the source 
   assert.deepEqual(reopened.crop, cropped); assert.equal(reopened.source, originalSource);
   const reset = cropFromFrame(original.source, original.source);
   assert.deepEqual(reset, { left: 0, right: 0, top: 0, bottom: 0 });
+});
+
+/** Creates independent pixel fixtures with actual outer backgrounds, plot content and fine annotations. */
+function cropPixels(background: [number, number, number, number]) {
+  const width = 160, height = 120, data = new Uint8ClampedArray(width * height * 4);
+  for (let offset = 0; offset < data.length; offset += 4) data.set(background, offset);
+  return { width, height, data };
+}
+
+/** Paints known source-space content without sharing any of the production detection logic. */
+function paintCropPixels(image: ReturnType<typeof cropPixels>, x: number, y: number, width: number, height: number, color: number[]): void {
+  for (let row = y; row < y + height; row++) {
+    for (let column = x; column < x + width; column++) image.data.set(color, (row * image.width + column) * 4);
+  }
+}
+
+test("whitespace detection removes only outer margins while retaining pale one-pixel labels and internal whitespace", () => {
+  const image = cropPixels([255, 255, 255, 255]);
+  paintCropPixels(image, 40, 30, 80, 50, [30, 60, 120, 255]);
+  paintCropPixels(image, 65, 40, 40, 30, [255, 255, 255, 255]);
+  paintCropPixels(image, 20, 95, 1, 1, [230, 230, 230, 255]);
+  const crop = whitespaceCrop(image);
+  assert(crop.left > 5 && crop.left / 100 * image.width < 20);
+  assert(crop.top > 5 && crop.top / 100 * image.height < 30);
+  assert((100 - crop.right) / 100 * image.width > 120);
+  assert((100 - crop.bottom) / 100 * image.height > 96);
+  assert(crop.right > 5 && crop.bottom > 5);
+});
+
+test("whitespace detection handles transparent and noisy backgrounds and preserves marks touching the image edge", () => {
+  const transparent = cropPixels([250, 10, 90, 0]);
+  paintCropPixels(transparent, 40, 30, 80, 50, [255, 255, 255, 255]);
+  const crop = whitespaceCrop(transparent);
+  assert(crop.left > 20 && crop.top > 20 && crop.right > 20 && crop.bottom > 20);
+  const noisy = cropPixels([255, 255, 255, 255]);
+  for (let offset = 0; offset < noisy.data.length; offset += 4) {
+    const value = 250 + offset % 6; noisy.data.set([value, value, value, 255], offset);
+  }
+  paintCropPixels(noisy, 40, 30, 80, 50, [0, 0, 0, 255]);
+  assert(whitespaceCrop(noisy).left > 20);
+  paintCropPixels(noisy, 0, 0, 1, 1, [0, 0, 0, 255]);
+  const edge = whitespaceCrop(noisy);
+  assert.equal(edge.left, 0); assert.equal(edge.top, 0); assert(edge.right > 0 && edge.bottom > 0);
+});
+
+test("whitespace detection leaves blank or nonuniform full-frame sources unchanged", () => {
+  assert.equal(whitespaceCrop(cropPixels([255, 255, 255, 255])), undefined);
+  assert.equal(whitespaceCrop(cropPixels([0, 0, 0, 0])), undefined);
+  const image = cropPixels([255, 255, 255, 255]);
+  for (let y = 0; y < image.height; y++) {
+    for (let x = 0; x < image.width; x++) image.data.set([x, y * 2, (x + y) % 256, 255], (y * image.width + x) * 4);
+  }
+  assert.equal(whitespaceCrop(image), undefined);
 });

@@ -18,7 +18,7 @@ export type SharedText = {
 };
 export type FigureElement = Panel | SharedText;
 export type FigureDocument = {
-  format: "papper-subfigure"; version: 1; width: number; height: number; autoHeight: boolean; embedded: boolean;
+  format: "papper-subfigure"; version: 1; width: number; height: number; autoHeight: boolean; embedded: boolean; autoRenumber?: boolean;
   background: "white" | "transparent"; font: TextStyle;
   layout: { mode?: "rows" | "panels" | "free"; tree?: PanelTree; columns: number; rows: number[]; weights: number[]; gap: number; rowGap: number; padding: number };
   elements: FigureElement[];
@@ -28,7 +28,7 @@ export type MeasureText = (run: RichRun, style: TextStyle) => number;
 /** Makes a new editable figure in physical points, independent of screen zoom or DPI. */
 export function createFigure(): FigureDocument {
   return { format: "papper-subfigure", version: 1, width: 160 * PT_PER_MM, height: 85 * PT_PER_MM,
-    autoHeight: true, embedded: false, background: "white", font: { family: "Times New Roman", size: 10, color: "#000000", align: "center" },
+    autoHeight: true, embedded: false, autoRenumber: true, background: "white", font: { family: "Times New Roman", size: 10, color: "#000000", align: "center" },
     layout: { mode: "rows", columns: 2, rows: [], weights: [], gap: 10, rowGap: 16, padding: 8 }, elements: [] };
 }
 
@@ -155,11 +155,19 @@ export function resizeFigure(figure: FigureDocument, width: number, measure: Mea
   reflowFigure(figure, measure);
 }
 
-/** Renumbers only when explicitly requested, leaving normal dragging semantically stable. */
+/** Assigns sequential letters in the current top-to-bottom, left-to-right visual order. */
 export function renumberPanels(figure: FigureDocument): void {
   figure.elements.filter((element): element is Panel => element.kind === "panel")
     .sort((a, b) => Math.abs(a.y - b.y) < 4 ? a.x - b.x : a.y - b.y)
     .forEach((panel, index) => { panel.label = panelLetter(index); });
+}
+
+/** Updates labels after an edit by default, preserving custom labels when automatic numbering is disabled. */
+export function autoRenumberPanels(figure: FigureDocument): boolean {
+  if (figure.autoRenumber === false) return false;
+  const panels = figure.elements.filter((element): element is Panel => element.kind === "panel"), labels = panels.map((panel) => panel.label);
+  renumberPanels(figure);
+  return panels.some((panel, index) => panel.label !== labels[index]);
 }
 
 /** Aligns or distributes selected elements in physical coordinates, including attached captions. */
@@ -194,6 +202,7 @@ export function alignElements(elements: FigureElement[], mode: string): void {
 export function validateFigure(value: unknown): asserts value is FigureDocument {
   const figure = value as FigureDocument;
   if (figure?.format !== "papper-subfigure" || figure.version !== 1 || !Array.isArray(figure.elements)) throw new Error("Unsupported combination figure format");
+  if (figure.autoRenumber !== undefined && typeof figure.autoRenumber !== "boolean") throw new Error("Invalid automatic numbering setting");
   /** Validates physical sizes entered through numeric controls. */
   const positive = (number: number): boolean => Number.isFinite(number) && number > 0;
   if (!positive(figure.width) || !positive(figure.height)) throw new Error("Figure dimensions must be positive");
