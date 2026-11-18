@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import { getYamlHeader } from "../manuscriptStyle/document";
 import { createManuscriptMetadataEdit, getBuiltMetadataValue, getManuscriptMetadataRange, getManuscriptMetadataValue, INLAY_METADATA_FIELDS, isInlayMetadataField, isInlayMetadataValue, type InlayMetadataField, type InlayMetadataValue } from "./settings";
 import { SET_CSL_STYLE_COMMAND, SET_INLAY_METADATA_COMMAND } from "./commands";
+import { appendHoverActions } from "../hoverActions";
 
 /** Applies and reveals one manuscript metadata setting, sharing Undo and concurrent-edit behavior across hint actions. */
 export async function applyInlayMetadataSetting(document: vscode.TextDocument, field: InlayMetadataField, value: InlayMetadataValue,
@@ -34,14 +35,11 @@ export async function applyInlayMetadataSetting(document: vscode.TextDocument, f
 /** Adds trusted hover actions using the source URI rather than whichever editor currently has focus. */
 export function appendInlayMetadataActions(tooltip: vscode.MarkdownString, uriText: string, fields: InlayMetadataField[], ast: unknown): void {
   if (!fields.length) return;
-  tooltip.isTrusted = { enabledCommands: fields.includes("csl") ? [SET_INLAY_METADATA_COMMAND, SET_CSL_STYLE_COMMAND] : [SET_INLAY_METADATA_COMMAND] };
-  tooltip.appendMarkdown(`${tooltip.value ? "\n\n" : ""}Papper Tools: `);
-  for (const [index, field] of fields.entries()) {
-    if (index) tooltip.appendMarkdown(" · ");
+  appendHoverActions(tooltip, fields.map(field => {
     const command = field === "csl" ? SET_CSL_STYLE_COMMAND : SET_INLAY_METADATA_COMMAND;
-    const args = encodeURIComponent(JSON.stringify(field === "csl" ? [uriText] : [uriText, field, getBuiltMetadataValue(ast, field)]));
-    tooltip.appendMarkdown(`[${t("Set {0}", t(INLAY_METADATA_FIELDS[field]))}](command:${command}?${args})`);
-  }
+    const args = field === "csl" ? [uriText] : [uriText, field, getBuiltMetadataValue(ast, field)];
+    return { command, args, label: t("Set {0}", t(INLAY_METADATA_FIELDS[field])) };
+  }));
   tooltip.appendMarkdown(fields.includes("csl") ? t("\n\nApplies to citations and the bibliography in the current manuscript") : t("\n\nApplies to references or captions of the same type in the current manuscript"));
 }
 

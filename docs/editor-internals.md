@@ -4,6 +4,16 @@
 
 These notes describe scanning, configuration contracts, caches, preview services, and synchronization for extension maintainers. User-facing behavior is documented in the editor guide.
 
+## Hover actions
+
+For a new command on a source hover, implement `HoverActionSource` from `src/hoverActions.ts`
+and add it to the relevant `PapperActionHoverProvider` list in `src/extension.ts`, in display
+order. Return the applicable source range, a plain-text label, the command ID and its arguments.
+The provider intersects the ranges and renders one **Papper Tools:** row for that position,
+deduplicating identical commands with identical arguments. Image previews, translations and other
+read-only content can still use normal hover providers. VS Code displays inlay-hint tooltips on
+the hint itself; use `appendHoverActions` for their command row too.
+
 ## Configuration and reference defaults
 
 Configuration and element-attribute completion/hover help, the settings window and **Papper Tools: Merge Style Example**

@@ -29,7 +29,9 @@ import { ElementAttributeProvider } from "./elementAttributes/providers";
 import { PapperSettingsController, OPEN_PAPPER_SETTINGS_COMMAND } from "./papperSettings/controller";
 import { PapperConfigurationSync } from "./papperConfigurationSync";
 import { openFileWithDefaultApplication } from "./externalFileOpener";
-import { SubfigureEditorController } from "./subfigureEditor/controller";
+import { SubfigureEditorController, CONVERT_SUBFIGURE, EDIT_SUBFIGURE } from "./subfigureEditor/controller";
+import { SubfigureHoverProvider } from "./subfigureEditor/hover";
+import { PapperActionHoverProvider } from "./hoverActions";
 
 /**
  * Activates the local Pandoc Markdown helper extension.
@@ -83,7 +85,9 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.languages.registerReferenceProvider(PANDOC_SELECTOR, new PandocReferenceProvider(index)));
   context.subscriptions.push(vscode.languages.registerHoverProvider(IMAGE_PREVIEW_SELECTOR, new ImagePreviewHoverProvider(imagePreviewRenderer, output)));
   context.subscriptions.push(vscode.languages.registerHoverProvider(MATH_HOVER_SELECTOR, new PandocHoverProvider(index, mathRenderer, paragraphTranslator, output, inlayHints)));
-  context.subscriptions.push(vscode.languages.registerHoverProvider(PANDOC_SELECTOR, manuscriptStyles));
+  context.subscriptions.push(vscode.languages.registerHoverProvider(PANDOC_SELECTOR, new PapperActionHoverProvider([
+    manuscriptStyles, new SubfigureHoverProvider(CONVERT_SUBFIGURE, EDIT_SUBFIGURE), new MarkdownYamlHeaderHoverProvider(ensureConfiguration),
+  ], output)));
   context.subscriptions.push(vscode.commands.registerCommand(SET_MANUSCRIPT_STYLE_COMMAND,
     /** Resolves the resource encoded in the hover link even when another editor is active. */
     (uriText: unknown, styleName: unknown, styleType: unknown) => manuscriptStyles.setStyle(uriText, styleName, styleType)));
@@ -113,9 +117,10 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.languages.registerCompletionItemProvider(PANDOC_SELECTOR, new PandocCompletionProvider(index), "@", ":"));
   context.subscriptions.push(vscode.languages.registerCompletionItemProvider(STYLE_CONFIGURATION_SELECTOR, new StyleConfigurationCompletionProvider(ensureConfiguration), ":", " ", "{", ","));
   context.subscriptions.push(vscode.languages.registerCodeLensProvider(STYLE_CONFIGURATION_SELECTOR, new StyleConfigurationCodeLensProvider()));
-  context.subscriptions.push(vscode.languages.registerHoverProvider(STYLE_CONFIGURATION_SELECTOR, new StyleConfigurationHoverProvider(ensureConfiguration)));
+  context.subscriptions.push(vscode.languages.registerHoverProvider(STYLE_CONFIGURATION_SELECTOR, new PapperActionHoverProvider([
+    new StyleConfigurationHoverProvider(ensureConfiguration),
+  ], output)));
   context.subscriptions.push(vscode.languages.registerCompletionItemProvider(PANDOC_SELECTOR, new MarkdownYamlHeaderCompletionProvider(ensureConfiguration), ":", " ", "{", ",", "-"));
-  context.subscriptions.push(vscode.languages.registerHoverProvider(PANDOC_SELECTOR, new MarkdownYamlHeaderHoverProvider(ensureConfiguration)));
   const elementAttributes = new ElementAttributeProvider(ensureConfiguration);
   context.subscriptions.push(vscode.languages.registerCompletionItemProvider(PANDOC_SELECTOR, elementAttributes, "{", " ", "=", '"', "'"));
   context.subscriptions.push(vscode.languages.registerHoverProvider(PANDOC_SELECTOR, elementAttributes));

@@ -137,8 +137,9 @@ images in Explorer and use the same command from its context menu. From a saved
 Markdown manuscript, the command records the insertion point and inserts the
 figure reference on first save. **Papper Tools: Edit Combination Figure** opens
 an editable SVG selected in Explorer or referenced under the Markdown cursor.
-Hover over a Markdown image referencing a saved combination SVG and choose
-**Edit subfigure layout** to reopen that exact image, regardless of cursor position.
+Hover over a Markdown image referencing a saved combination SVG. On the **Papper Tools:**
+row, **Edit subfigure layout** follows **Set Image Caption Style** and **Set Figure Style**.
+Choose it to reopen that exact image, regardless of cursor position.
 The action checks the file's editable layout data; ordinary SVG images do not offer it.
 Ordinary SVGs remain source images; this editor only edits its own structured
 combination figures.

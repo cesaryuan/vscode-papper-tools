@@ -356,7 +356,7 @@ test("CSL key and path hovers offer style selection for their own source and met
   /** Retains hover contents and range as the VS Code host would. */
   class Hover {
     /** Exposes rendered help for key and value hover interactions. */
-    constructor(public contents: MarkdownString, public range: unknown) {}
+    constructor(public contents: MarkdownString[], public range: unknown) {}
   }
   /** Carries offsets through the hover API. */
   class Range {
@@ -366,6 +366,7 @@ test("CSL key and path hovers offer style selection for their own source and met
   const fixture = new SourceModuleFixture({ vscode: { MarkdownString, Hover, Range } });
   const { MarkdownYamlHeaderHoverProvider } = fixture.load<typeof import("../src/markdownYamlHeader")>("src/markdownYamlHeader.ts");
   const { StyleConfigurationHoverProvider } = fixture.load<typeof import("../src/styleConfiguration")>("src/styleConfiguration.ts");
+  const { PapperActionHoverProvider } = fixture.load<typeof import("../src/hoverActions")>("src/hoverActions.ts");
   for (const scenario of [
     { text: "---\ncsl: chosen.csl\n---\nBody\n", language: "markdown", filename: "manuscript.md", keys: ["csl"] },
     { text: "---\npapperSettings:\n  pandocMetadata: { csl: chosen.csl }\n---\n", language: "markdown", filename: "manuscript.md", keys: ["papperSettings", "pandocMetadata", "csl"] },
@@ -374,13 +375,15 @@ test("CSL key and path hovers offer style selection for their own source and met
     const uri = `file:///${scenario.filename}`;
     const document = { version: 1, uri: { scheme: "file", fsPath: scenario.filename, toString: () => uri }, languageId: scenario.language,
       getText: () => scenario.text, positionAt: (offset: number) => offset, offsetAt: (position: number) => position };
-    const provider = scenario.language === "yaml" ? new StyleConfigurationHoverProvider() : new MarkdownYamlHeaderHoverProvider();
+    const provider = new PapperActionHoverProvider([scenario.language === "yaml" ? new StyleConfigurationHoverProvider() : new MarkdownYamlHeaderHoverProvider()], console as never);
     for (const offset of [scenario.text.indexOf("csl:"), scenario.text.indexOf("chosen.csl")]) {
       const hover = await provider.provideHover(document as any, offset as any, { isCancellationRequested: false } as any) as unknown as Hover;
-      const link = /\[Set Citation Style\]\(command:([^?]+)\?([^)]*)\)/.exec(hover.contents.value);
+      const [help, row] = hover.contents;
+      assert.ok(help.value.includes("Papper Configuration Help"));
+      const link = /\[Set Citation Style\]\(command:([^?]+)\?([^)]*)\)/.exec(row.value);
       assert(link, "Both the CSL key and file path should offer selection");
       assert.deepEqual(JSON.parse(decodeURIComponent(link[2])), [uri, scenario.keys]);
-      assert.deepEqual(hover.contents.isTrusted, { enabledCommands: [link[1]] });
+      assert.deepEqual(row.isTrusted, { enabledCommands: [link[1]] });
     }
   }
 });

@@ -5,7 +5,8 @@ import * as vscode from "vscode";
 import { isMap, isScalar, isSeq, isAlias, YAMLMap, parseDocument, visit } from "yaml";
 import { DOCX_STYLE_FIELDS, type StyleField } from "./manuscriptStyle/fields";
 import { STYLE_FIELDS, PANDOC_METADATA_FIELDS, getConfigurationContract, getConfigurationRevision } from "./configurationContract";
-import { appendCslConfigurationAction } from "./inlayHints/csl/configuration";
+import { cslConfigurationAction } from "./inlayHints/csl/configuration";
+import type { HoverActionSource, HoverContribution } from "./hoverActions";
 
 /**
  * Provides completion, hover help and example-configuration editing for Papper `style.yml` files.
@@ -287,14 +288,14 @@ export function getStyleHoverEntries(text: string, rootFields: Record<string, St
 }
 
 /** Shows field documentation for existing YAML keys and values, caching each document version. */
-export class StyleConfigurationHoverProvider implements vscode.HoverProvider {
+export class StyleConfigurationHoverProvider implements HoverActionSource {
   private readonly cache = new WeakMap<vscode.TextDocument, { version: number; revision: number; entries: StyleHoverInfo[] }>();
 
   /** Refreshes installed help before reading or rebuilding cached entries. */
   constructor(private readonly ensure: () => Promise<void> = async () => {}) {}
 
   /** Renders the hovered setting's purpose and value hints. */
-  async provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.Hover | undefined> {
+  async contribute(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<HoverContribution | undefined> {
     if (token.isCancellationRequested || !isStyleConfigurationDocument(document)) return undefined;
     await this.ensure();
     if (token.isCancellationRequested) return undefined;
@@ -312,13 +313,13 @@ export class StyleConfigurationHoverProvider implements vscode.HoverProvider {
 }
 
 /** Renders YAML field help safely for either a style file or a Markdown header. */
-export function createConfigurationHover(document: vscode.TextDocument, info: StyleHoverInfo): vscode.Hover {
+export function createConfigurationHover(document: vscode.TextDocument, info: StyleHoverInfo): HoverContribution {
   const markdown = new vscode.MarkdownString();
   markdown.appendMarkdown(t("**Papper Configuration Help**\n\n"));
   markdown.appendText(localizeDescription(info.description));
   if (info.values?.length) markdown.appendText(t("\n\nValue hints: {0}", info.values.join(" / ")));
-  if (info.path.at(-1)?.toLowerCase() === "csl") appendCslConfigurationAction(markdown, document, info.path);
-  return new vscode.Hover(markdown, new vscode.Range(document.positionAt(info.start), document.positionAt(info.end)));
+  const action = info.path.at(-1)?.toLowerCase() === "csl" ? cslConfigurationAction(document, info.path) : undefined;
+  return { help: markdown, actions: action ? [action] : [], range: new vscode.Range(document.positionAt(info.start), document.positionAt(info.end)) };
 }
 
 /** Provides the clickable text action shown above a style configuration file. */

@@ -138,13 +138,14 @@ test("subfigure hover targets its source document and group from images, contain
       constructor(public contents: unknown, public range: unknown) {} },
   } });
   const { SubfigureHoverProvider, findHoveredGroup } = fixture.load<typeof import("../src/subfigureEditor/hover")>("src/subfigureEditor/hover.ts");
+  const { renderHover } = fixture.load<typeof import("../src/hoverActions")>("src/hoverActions.ts");
   const text = 'See @fig:group and @fig:a.\n\n::: {#fig:group}\n![A](a.png){#fig:a} ![B](b.png){#fig:b}\n\nCaption\n:::\n\nOrdinary paragraph.\n`@fig:a`';
   for (const offset of [text.indexOf("@fig:group"), text.indexOf("@fig:a"), text.indexOf("![A]"), text.indexOf("Caption"), text.indexOf(":::")]) {
     const group = findHoveredGroup(text, offset);
     assert.equal(group?.parent, "fig:group");
     const document = { getText: () => text, offsetAt: () => offset, uri: { scheme: "file", toString: () => "file:///different/manuscript.md" }, version: 7, lineAt: () => ({ range: {} }) };
-    const hover = await new SubfigureHoverProvider("convert.test", "edit.test").provideHover(document as never, { line: 0 } as never);
-    const markdown = hover.contents as unknown as { value: string; isTrusted: unknown };
+    const contribution = await new SubfigureHoverProvider("convert.test", "edit.test").contribute(document as never, { line: 0 } as never);
+    const markdown = renderHover([contribution!])!.contents[0] as { value: string; isTrusted: unknown };
     assert.deepEqual(markdown.isTrusted, { enabledCommands: ["convert.test"] });
     const args = JSON.parse(decodeURIComponent(markdown.value.match(/command:convert.test\?([^)]*)/)[1]));
     assert.deepEqual(args, ["file:///different/manuscript.md", group.start, 7]);
@@ -153,10 +154,10 @@ test("subfigure hover targets its source document and group from images, contain
   assert.equal(findHoveredGroup(text, text.lastIndexOf("@fig:a")), undefined);
 });
 
-test("standalone SVG image hovers open only actual combination files and notice when their metadata changes", async () => {
+test("one image action row places editing after both styles and removes it when SVG metadata changes", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "papper-hover-"));
   try {
-    const filename = path.join(directory, "组合图 example.svg"), manuscript = path.join(directory, "manuscript.md");
+    const filename = path.join(directory, "组合图 example.svg"), manuscript = path.join(directory, "paper (draft).md");
     const fixture = new SourceModuleFixture({ vscode: {
       MarkdownString: class { value = ""; isTrusted: unknown;
         /** Captures the actionable Markdown emitted to the user. */
@@ -164,30 +165,48 @@ test("standalone SVG image hovers open only actual combination files and notice 
       Hover: class {
         /** Keeps the hover's public body and target range available for assertions. */
         constructor(public contents: unknown, public range: unknown) {} },
-      Range: class {
+      Range: class Range {
         /** Represents the real image token's source span. */
-        constructor(public startLine: number, public startCharacter: number, public endLine: number, public endCharacter: number) {} },
+        constructor(public startLine: number, public startCharacter: number, public endLine: number, public endCharacter: number) {}
+        /** Intersects the single-line style and image spans on this fixture. */
+        intersection(other: this) { return new Range(0, Math.max(this.startCharacter, other.startCharacter), 0, Math.min(this.endCharacter, other.endCharacter)); } },
       Uri: { file: (value: string) => ({ toString: () => pathToFileURL(value).toString() }) },
     } });
     const { SubfigureHoverProvider } = fixture.load<typeof import("../src/subfigureEditor/hover")>("src/subfigureEditor/hover.ts");
-    const provider = new SubfigureHoverProvider("convert.test", "edit.test");
+    const { ManuscriptStyleController } = fixture.load<typeof import("../src/manuscriptStyle/controller")>("src/manuscriptStyle/controller.ts");
+    const { PapperActionHoverProvider } = fixture.load<typeof import("../src/hoverActions")>("src/hoverActions.ts");
+    const provider = new PapperActionHoverProvider([
+      new ManuscriptStyleController({ globalStorageUri: { fsPath: directory } } as never, undefined),
+      new SubfigureHoverProvider("convert.test", "edit.test"),
+    ], { appendLine: assert.fail } as never);
     let text = "![Combined plot](<组合图%20example.svg>){#fig:combined}";
     const document = { getText: () => text, offsetAt: (position: { character: number }) => position.character,
       uri: { scheme: "file", fsPath: manuscript, toString: () => pathToFileURL(manuscript).toString() },
       version: 1, lineAt: () => ({ text, range: {} }) };
     await writeFile(filename, serializeFigure(sample()));
-    const hover = await provider.provideHover(document as never, { line: 0, character: 5 } as never);
-    const markdown = hover.contents as unknown as { value: string; isTrusted: unknown };
-    assert.deepEqual(markdown.isTrusted, { enabledCommands: ["edit.test"] });
-    assert.deepEqual(JSON.parse(decodeURIComponent(markdown.value.match(/command:edit.test\?([^)]*)/)[1])), [pathToFileURL(filename).toString()]);
+    /** Reads the single visible row and follows each link's actual resource argument. */
+    async function readRow() {
+      const hover = await provider.provideHover(document as never, { line: 0, character: 5 } as never, { isCancellationRequested: false } as never);
+      assert.equal(hover?.contents.length, 1);
+      const row = hover!.contents[0] as { value: string; isTrusted: unknown };
+      assert.equal(row.value.split("Papper Tools: ").length, 2);
+      assert.ok(!row.value.includes("\n"));
+      const links = [...row.value.matchAll(/\[([^\]]+)\]\(command:([^?]+)\?([^)]*)\)/g)];
+      assert.deepEqual(row.isTrusted, { enabledCommands: [...new Set(links.map(link => link[2]))] });
+      return links.map(link => [link[1], JSON.parse(decodeURIComponent(link[3]))]);
+    }
+    const styles = ["Image Caption", "Figure"].map(name => [`Set ${name} Style`, [document.uri.toString(), name]]);
+    assert.deepEqual(await readRow(), [...styles, ["$(layout) Edit subfigure layout", [pathToFileURL(filename).toString()]]]);
     await writeFile(filename, '<svg xmlns="http://www.w3.org/2000/svg"><text>ordinary SVG</text></svg>');
-    assert.equal(await provider.provideHover(document as never, { line: 0, character: 5 } as never), undefined);
+    assert.deepEqual(await readRow(), styles);
     await writeFile(filename, '<svg xmlns="http://www.w3.org/2000/svg"><metadata id="papper-subfigure">{"format":"invalid"}</metadata></svg>');
-    assert.equal(await provider.provideHover(document as never, { line: 0, character: 5 } as never), undefined);
+    assert.deepEqual(await readRow(), styles);
     text = "![Missing](missing.svg)";
-    assert.equal(await provider.provideHover(document as never, { line: 0, character: 5 } as never), undefined);
+    document.version++;
+    assert.deepEqual(await readRow(), styles);
     text = "![Remote](https://example.com/combined.svg)";
-    assert.equal(await provider.provideHover(document as never, { line: 0, character: 5 } as never), undefined);
+    document.version++;
+    assert.deepEqual(await readRow(), styles);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 

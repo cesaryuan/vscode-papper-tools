@@ -105,7 +105,7 @@ HTML 方便写作时检查内容，最终分页请在 Word 中确认。[Papper �
 使用 **Papper Tools: 编辑论文组合图** 继续编辑；已有 `pandoc-crossref` 子图组可将光标放在组内，
 运行 **Papper Tools: 将子图组转换为 SVG**。编辑器提供 A4 纸张比例参照、物理尺寸、固定 pt 字号、
 嵌套面板布局、手动对齐、可关闭的默认自动编号、拖拽裁剪及自动去空白、富文本子题注和 PNG 导出。
-悬浮在 Markdown 中引用组合图 SVG 的图片上，也可直接点击编辑布局。详见[组合图使用指南](docs/editor-guide.md#combination-figures)。
+悬浮在 Markdown 中引用组合图 SVG 的图片上，**Papper Tools:** 操作栏会在图注样式、图片样式两个按钮之后显示**编辑子图布局**。详见[组合图使用指南](docs/editor-guide.md#combination-figures)。
 
 悬停英文段落或代码注释时可以查看翻译。翻译使用 Google Translate 或 Microsoft Translator；不需要时，可在设置中关闭 `pandocManuscriptTools.enableParagraphHoverTranslation`。
 

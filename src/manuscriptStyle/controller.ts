@@ -4,6 +4,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { createHash, randomUUID } from "node:crypto";
 import * as vscode from "vscode";
+import type { HoverActionSource, HoverContribution } from "../hoverActions";
 import { readReferenceStyles, findReferenceStyle, type ReferenceStyle } from "./referenceStyles";
 import { addManuscriptStyle, getManuscriptStyleTargets, getYamlHeader, type StyleTarget } from "./document";
 import { findPandocManuscriptProject, findExistingPapperExecutable, preparePapperEnvironment, runProcess } from "../papperBuildUtils";
@@ -128,13 +129,8 @@ export class ReferenceStyleCache {
   }
 }
 
-/** Escapes custom style names so they cannot inject links or formatting into the hover action. */
-function escapeMarkdownText(value: string): string {
-  return value.replace(/[\\`*_[\]<>]/g, "\\$&").replace(/\r?\n/g, " ");
-}
-
-/** Provides independently composable style hovers alongside translation, images and math. */
-export class ManuscriptStyleController implements vscode.HoverProvider {
+/** Contributes applicable Word style actions to the manuscript hover row. */
+export class ManuscriptStyleController implements HoverActionSource {
   private readonly targets = new WeakMap<vscode.TextDocument, { version: number; entries: StyleTarget[] }>();
   private readonly cache: ReferenceStyleCache;
 
@@ -144,7 +140,7 @@ export class ManuscriptStyleController implements vscode.HoverProvider {
   }
 
   /** Shows only the trusted style action; hovering never exports or reads the reference DOCX. */
-  provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): vscode.Hover | undefined {
+  contribute(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): HoverContribution | undefined {
     if (document.uri.scheme !== "file") return undefined;
     let targets = this.targets.get(document);
     try {
@@ -162,22 +158,18 @@ export class ManuscriptStyleController implements vscode.HoverProvider {
     const baseActions = base ? (base.name === "Image Caption" ? [base, { ...base, name: "Figure" }] : [base]) : [];
     const actions = [...baseActions, ...matching.filter((entry) => entry.custom)];
     const unique = actions.filter((entry, index) => actions.findIndex((candidate) => candidate.name === entry.name && candidate.type === entry.type) === index);
-    const markdown = new vscode.MarkdownString();
-    markdown.isTrusted = { enabledCommands: [SET_MANUSCRIPT_STYLE_COMMAND] };
-    markdown.appendMarkdown("Papper Tools: ");
-    for (const [index, target] of unique.entries()) {
-      const args = encodeURIComponent(JSON.stringify(target.custom ? [document.uri.toString(), target.name, target.type] : [document.uri.toString(), target.name]));
-      if (index) markdown.appendMarkdown(" | ");
+    const styleActions = unique.map(target => {
+      const args = target.custom ? [document.uri.toString(), target.name, target.type] : [document.uri.toString(), target.name];
       // Translate built-in labels only; keep Word style names in command arguments and custom labels intact.
       const displayName = target.custom ? target.name : target.name.replace(/^标题\s*(\d)$/, "Heading $1").replace(/^正文文本$/, "Body Text");
-      markdown.appendMarkdown(`[${escapeMarkdownText(t("Set {0} Style", displayName))}](command:${SET_MANUSCRIPT_STYLE_COMMAND}?${args})`);
-    }
+      return { command: SET_MANUSCRIPT_STYLE_COMMAND, args, label: t("Set {0} Style", displayName) };
+    });
     // Restrict the hover to the intersection so an inline action disappears when the mouse leaves its span.
     const startLine = Math.max(...unique.map((entry) => entry.line));
     const endLine = Math.min(...unique.map((entry) => entry.endLine));
     const startCharacter = Math.max(...unique.filter((entry) => entry.line === startLine).map((entry) => entry.startCharacter));
     const endCharacter = Math.min(...unique.filter((entry) => entry.endLine === endLine).map((entry) => entry.endCharacter));
-    return new vscode.Hover(markdown, new vscode.Range(startLine, startCharacter, endLine, endCharacter));
+    return { actions: styleActions, range: new vscode.Range(startLine, startCharacter, endLine, endCharacter) };
   }
 
   /** Inserts the clicked element's effective defaults in a single undoable frontmatter edit. */

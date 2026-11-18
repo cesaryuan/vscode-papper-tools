@@ -7,6 +7,7 @@ import { findImageTokenAtPosition } from "../imagePreview/imageTokenParser";
 import { resolveLocalPath } from "../imagePreview/pathResolver";
 import { parseFigureSvg } from "./document";
 import { AsyncLruCache } from "../asyncLruCache";
+import type { HoverActionSource, HoverContribution } from "../hoverActions";
 
 /** Finds an editable group at its source or through a local parent/child citation. */
 export function findHoveredGroup(text: string, offset: number): ImportedGroup | undefined {
@@ -19,7 +20,7 @@ export function findHoveredGroup(text: string, offset: number): ImportedGroup | 
 }
 
 /** Offers one trusted editing action tied to the hovered document rather than the active cursor. */
-export class SubfigureHoverProvider implements vscode.HoverProvider {
+export class SubfigureHoverProvider implements HoverActionSource {
   private readonly recognized = new AsyncLruCache<boolean>(64, 32_768, () => 1);
 
   /** Uses explicit commands for importing Markdown groups and opening existing layout SVGs. */
@@ -36,7 +37,7 @@ export class SubfigureHoverProvider implements vscode.HoverProvider {
   }
 
   /** Shows editing actions on supported groups, their citations, and recognized local SVG image tokens. */
-  async provideHover(document: vscode.TextDocument, position: vscode.Position, token?: vscode.CancellationToken): Promise<vscode.Hover | undefined> {
+  async contribute(document: vscode.TextDocument, position: vscode.Position, token?: vscode.CancellationToken): Promise<HoverContribution | undefined> {
     if (document.uri.scheme !== "file") return undefined;
     const version = document.version;
     const group = findHoveredGroup(document.getText(), document.offsetAt(position));
@@ -51,12 +52,8 @@ export class SubfigureHoverProvider implements vscode.HoverProvider {
     } catch { return undefined; } // Missing or unreadable images should not break the other image hover actions.
   }
 
-  /** Binds the action to the hovered resource and trusts only that specific registered command. */
-  private editLink(command: string, parameters: unknown[], range: vscode.Range): vscode.Hover {
-    const args = encodeURIComponent(JSON.stringify(parameters));
-    const markdown = new vscode.MarkdownString(undefined, true);
-    markdown.isTrusted = { enabledCommands: [command] };
-    markdown.appendMarkdown(`[$(layout) ${t("Edit subfigure layout")}](command:${command}?${args})`);
-    return new vscode.Hover(markdown, range);
+  /** Binds the shared row's editing action to the hovered image or group. */
+  private editLink(command: string, args: unknown[], range: vscode.Range): HoverContribution {
+    return { range, actions: [{ command, args, label: t("Edit subfigure layout"), icon: "layout" }] };
   }
 }

@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import type { HoverActionSource, HoverContribution } from "./hoverActions";
 import { getYamlHeader } from "./manuscriptStyle/document";
 import { MANUSCRIPT_FIELDS, getConfigurationRevision } from "./configurationContract";
 import {
@@ -46,15 +47,18 @@ export class MarkdownYamlHeaderCompletionProvider implements vscode.CompletionIt
 }
 
 /** Shows help for filled header fields while retaining only the latest parsed document version. */
-export class MarkdownYamlHeaderHoverProvider implements vscode.HoverProvider {
+export class MarkdownYamlHeaderHoverProvider implements HoverActionSource {
   private readonly cache = new WeakMap<vscode.TextDocument, { version: number; revision: number; entries: StyleHoverInfo[] }>();
 
   /** Refreshes exported help without disturbing the Markdown document. */
   constructor(private readonly ensure: () => Promise<void> = async () => {}) {}
 
   /** Resolves the hovered header token and leaves body hovers to existing Markdown providers. */
-  async provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.Hover | undefined> {
+  async contribute(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<HoverContribution | undefined> {
     if (token.isCancellationRequested || !isMarkdownEditor(document)) return undefined;
+    // Body image actions must not wait for Papper to refresh YAML field descriptions.
+    const header = getYamlHeader(document.getText(), true), offset = document.offsetAt(position);
+    if (!header || offset < header.start || offset >= header.end) return undefined;
     await this.ensure();
     if (token.isCancellationRequested) return undefined;
     let cached = this.cache.get(document);
@@ -63,7 +67,6 @@ export class MarkdownYamlHeaderHoverProvider implements vscode.HoverProvider {
       cached = { version: document.version, revision, entries: getMarkdownHeaderHoverEntries(document.getText()) };
       this.cache.set(document, cached);
     }
-    const offset = document.offsetAt(position);
     const info = cached.entries.find((entry) => entry.start <= offset && offset < entry.end);
     return info ? createConfigurationHover(document, info) : undefined;
   }

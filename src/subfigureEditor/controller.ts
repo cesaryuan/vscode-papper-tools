@@ -12,8 +12,6 @@ import type { EditorMessage } from "./protocol";
 import { findImageTokenAtPosition } from "../imagePreview/imageTokenParser";
 import { t } from "../localization";
 import { setPngDpi } from "./png";
-import { SubfigureHoverProvider } from "./hover";
-import { PANDOC_SELECTOR } from "../constants";
 
 export const SUBFIGURE_EDITOR = "pandocManuscriptTools.subfigureEditor";
 export const NEW_SUBFIGURE = "pandocManuscriptTools.newSubfigure";
@@ -61,7 +59,6 @@ export class SubfigureEditorController implements vscode.CustomEditorProvider<Fi
     this.disposables.push(vscode.commands.registerCommand(NEW_SUBFIGURE, (uri?: vscode.Uri, selected?: vscode.Uri[]) => this.run(() => this.create(uri, selected))));
     this.disposables.push(vscode.commands.registerCommand(EDIT_SUBFIGURE, (uri?: vscode.Uri | string) => this.run(() => this.edit(typeof uri === "string" ? vscode.Uri.parse(uri) : uri))));
     this.disposables.push(vscode.commands.registerCommand(CONVERT_SUBFIGURE, (uri?: string, offset?: number, version?: number) => this.run(() => this.convert(uri, offset, version))));
-    this.disposables.push(vscode.languages.registerHoverProvider(PANDOC_SELECTOR, new SubfigureHoverProvider(CONVERT_SUBFIGURE, EDIT_SUBFIGURE)));
     const watcher = vscode.workspace.createFileSystemWatcher("**/*");
     /** Invalidates only documents that reference the changed image, preserving manual geometry. */
     const changed = (uri: vscode.Uri): void => {

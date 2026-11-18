@@ -6,6 +6,7 @@ All notable changes to Papper Tools are documented in this file.
 
 ### Changed
 
+- Group source-hover commands on one Papper Tools row. On editable combination images, **Edit subfigure layout** follows the caption and figure style actions.
 - Fix a duplicate undo or redo request when a combination-figure keyboard shortcut also reaches the VS Code workbench.
 - Keep panels stationary while dragging. Highlight direct swaps at image centres, local edge splits, insertion between nested rows or columns, and whole-layout drops on the paper margins.
 - Offer editing directly from Markdown image hovers for recognized combination SVGs. Renumber panels automatically after edits by default, with a persisted opt-out and one-time manual action. Add reversible outer-whitespace trimming to the crop toolbar, including transparent backgrounds, content previews, cancellation and undo.

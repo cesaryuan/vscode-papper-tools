@@ -131,9 +131,9 @@ function renderStyleHover(text: string, line: number, character: number): { mark
   /** Represents the hover result returned synchronously to the editor. */
   class HoverResult {
     /** Keeps its content available for user-visible output assertions. */
-    constructor(readonly content: HoverMarkdown, readonly range: unknown) {}
+    constructor(readonly content: HoverMarkdown[], readonly range: unknown) {}
   }
-  const { ManuscriptStyleController } = new SourceModuleFixture({
+  const fixture = new SourceModuleFixture({
     vscode: {
       MarkdownString: HoverMarkdown,
       Hover: HoverResult,
@@ -144,7 +144,9 @@ function renderStyleHover(text: string, line: number, character: number): { mark
     },
     // No Papper APIs are provided: a hover must remain usable before Papper has been installed.
     "src/papperBuildUtils.ts": {},
-  }).load<typeof import("../src/manuscriptStyle/controller")>("src/manuscriptStyle/controller.ts");
+  });
+  const { ManuscriptStyleController } = fixture.load<typeof import("../src/manuscriptStyle/controller")>("src/manuscriptStyle/controller.ts");
+  const { renderHover } = fixture.load<typeof import("../src/hoverActions")>("src/hoverActions.ts");
   const uriText = "file:///paper.md";
   const document = {
     uri: { scheme: "file", toString: () => uriText },
@@ -152,9 +154,9 @@ function renderStyleHover(text: string, line: number, character: number): { mark
     getText: () => text,
   } as never;
   const controller = new ManuscriptStyleController({ globalStorageUri: { fsPath: os.tmpdir() } } as never, undefined);
-  const hover = controller.provideHover(document, { line, character } as never, { isCancellationRequested: false } as never) as unknown;
+  const hover = renderHover([controller.contribute(document, { line, character } as never, { isCancellationRequested: false } as never)!]) as unknown;
   assert.ok(hover instanceof HoverResult);
-  return { markdown: hover.content.value, range: (hover.range as { coordinates: number[] }).coordinates };
+  return { markdown: hover.content.map(part => part.value).join("\n"), range: (hover.range as { coordinates: number[] }).coordinates };
 }
 
 /** Verifies a normal source hover renders one button without any explanatory content. */

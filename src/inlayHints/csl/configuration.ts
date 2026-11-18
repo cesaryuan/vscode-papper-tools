@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 import { isAlias, isMap, isScalar, parseDocument, Scalar, YAMLMap } from "yaml";
 import { getYamlHeader } from "../../manuscriptStyle/document";
 import { SET_CSL_STYLE_COMMAND } from "../commands";
+import type { HoverAction } from "../../hoverActions";
 
 const STYLE_NAMES = new Set(["style.yml", "style.yaml", "style-project.yml", "style-project.yaml"]);
 
@@ -93,10 +94,8 @@ export async function applyCslConfiguration(document: vscode.TextDocument, keys:
 }
 
 /** Adds a trusted action for the exact hovered metadata field, with no network work until clicked. */
-export function appendCslConfigurationAction(markdown: vscode.MarkdownString, document: vscode.TextDocument, keys: string[]): void {
+export function cslConfigurationAction(document: vscode.TextDocument, keys: string[]): HoverAction | undefined {
   if (document.uri.scheme !== "file") return;
   try { getCslSettingPath(document, keys); } catch { return; }
-  const args = encodeURIComponent(JSON.stringify([document.uri.toString(), keys]));
-  markdown.isTrusted = { enabledCommands: [SET_CSL_STYLE_COMMAND] };
-  markdown.appendMarkdown(`\n\nPapper Tools: [${t("Set Citation Style")}](command:${SET_CSL_STYLE_COMMAND}?${args})`);
+  return { command: SET_CSL_STYLE_COMMAND, args: [document.uri.toString(), keys], label: t("Set Citation Style") };
 }
