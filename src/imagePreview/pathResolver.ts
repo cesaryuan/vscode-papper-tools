@@ -1,6 +1,23 @@
 import * as path from "path";
 import { fileURLToPath } from "url";
 
+/** Resolves a scheme-free preview URL, separating its suffix before decoding the filename. */
+export function resolveRelativePreviewResource(directory: string, value: string) {
+  const url = value.trim();
+  if (!url || /^(?:[a-z][a-z0-9+.-]*:|[?#]|[\\/]{2})/i.test(url)) return undefined;
+  const suffixIndex = url.search(/[?#]/);
+  let filename = suffixIndex < 0 ? url : url.slice(0, suffixIndex);
+  try {
+    filename = decodeURIComponent(filename);
+  } catch {
+    // Malformed escapes can be part of a literal local filename.
+  }
+  return {
+    filePath: path.resolve(directory, normalizeRelativeSeparators(filename)),
+    suffix: suffixIndex < 0 ? "" : url.slice(suffixIndex),
+  };
+}
+
 /**
  * Resolves a local image target against the current document.
  *

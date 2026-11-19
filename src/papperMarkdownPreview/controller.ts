@@ -11,7 +11,7 @@ import { isBuildableMarkdownDocument } from "../vscodeUtils";
 import { HtmlPreviewClickNavigation, type HtmlPreviewBlockDescriptor, type HtmlPreviewClickMessage } from "./clickNavigation";
 import { HtmlPreviewScrollSync, type HtmlPreviewMessage } from "./scrollSync";
 import { HtmlPreviewEditorScrollIntent } from "./editorScrollIntent";
-import { countHtmlElements, createNonce, injectHtmlPreviewBridge, removeTemporaryMarkdownDirectory, rewriteHtmlResourceUris, waitForWebviewUpdate } from "./webview";
+import { countHtmlElements, createNonce, embedHtmlLinkedSvgImages, injectHtmlPreviewBridge, removeTemporaryMarkdownDirectory, rewriteHtmlResourceUris, waitForWebviewUpdate } from "./webview";
 
 /** Owns Papper Markdown HTML builds, preview panel lifecycle, and refresh scheduling. */
 export class PapperMarkdownPreviewController {
@@ -381,17 +381,21 @@ export class PapperMarkdownPreviewController {
     }
     const nonce = createNonce();
     const started = performance.now();
+    const sourceDirectory = path.dirname(document.uri.fsPath);
+    const projectRoot = project.rootUri.fsPath;
     const cachedHtml = await cacheHtmlMetafileImages(
       html,
-      path.dirname(document.uri.fsPath),
-      project.rootUri.fsPath,
-      path.join(project.rootUri.fsPath, ".pmt", "cache", "html-preview", "metafile-svg"),
+      sourceDirectory,
+      projectRoot,
+      path.join(projectRoot, ".pmt", "cache", "html-preview", "metafile-svg"),
       (filePath) => panel.webview.asWebviewUri(vscode.Uri.file(filePath)).toString(),
       this.output,
     );
 
     if (!this.isCurrentHtmlBuild(panel, document, sourceVersion, buildId)) return;
-    const rewrittenHtml = rewriteHtmlResourceUris(cachedHtml.html, panel.webview, path.dirname(document.uri.fsPath));
+    const svgHtml = await embedHtmlLinkedSvgImages(cachedHtml.html, sourceDirectory, projectRoot, this.output);
+    if (!this.isCurrentHtmlBuild(panel, document, sourceVersion, buildId)) return;
+    const rewrittenHtml = rewriteHtmlResourceUris(svgHtml, panel.webview, sourceDirectory);
     if (countHtmlElements(html, "style") !== countHtmlElements(rewrittenHtml, "style")) {
       this.output.appendLine(`[HTML] Preserving Pandoc styles failed: style element count changed for ${document.uri.fsPath}`);
       return;

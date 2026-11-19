@@ -4,6 +4,8 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
 import { prepareHtmlPreviewKaTeX, buildHtmlPreviewCsp } from "../htmlPreviewCsp";
+import { resolveRelativePreviewResource } from "../imagePreview/pathResolver";
+import { renderLinkedSvgDataUri } from "../imagePreview/svgPreview";
 import { PreviewScrollAnchors } from "./scrollAnchors";
 import { renderPreviewMath } from "./mathRendering";
 
@@ -67,25 +69,38 @@ export function countHtmlElements(html: string, elementName: string) {
  */
 export function rewriteHtmlResourceUris(html: string, webview: vscode.Webview, sourceDirectory: string) {
   return html.replace(/(\b(?:src|href)\s*=\s*["'])([^"']+)(["'])/gi, (match, prefix: string, value: string, suffix: string) => {
-    const decodedValue = decodeResourceAttribute(value);
-    if (/^(?:[a-z][a-z0-9+.-]*:|#|\/\/)/i.test(decodedValue)) {
-      return match;
-    }
-    // URL suffixes are URI components, not part of a local filename. Split before
-    // decoding so encoded # and ? can still be literal filename characters.
-    const suffixIndex = decodedValue.search(/[?#]/);
-    let localPath = suffixIndex < 0 ? decodedValue : decodedValue.slice(0, suffixIndex);
-    const resourceSuffix = suffixIndex < 0 ? "" : decodedValue.slice(suffixIndex);
-    try {
-      localPath = decodeURIComponent(localPath);
-    } catch {
-      // Malformed escapes may be literal filenames; do not abort the entire preview.
-    }
-    const resourcePath = path.resolve(sourceDirectory, localPath.replace(/[\\/]/g, path.sep));
-    const uri = `${webview.asWebviewUri(vscode.Uri.file(resourcePath)).toString()}${resourceSuffix}`;
-    const escapedUri = uri.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    return `${prefix}${escapedUri}${suffix}`;
+    const resource = resolveRelativePreviewResource(sourceDirectory, decodeResourceAttribute(value));
+    if (!resource) return match;
+    const uri = `${webview.asWebviewUri(vscode.Uri.file(resource.filePath)).toString()}${resource.suffix}`;
+    return `${prefix}${escapeResourceAttribute(uri)}${suffix}`;
   });
+}
+
+/** Replaces only SVG image sources that need embedding, leaving normal `<img>` layout and lightbox behavior intact. */
+export async function embedHtmlLinkedSvgImages(html: string, sourceDirectory: string, projectRoot: string, output: Pick<vscode.OutputChannel, "appendLine">): Promise<string> {
+  const rendered = new Map<string, string | undefined>();
+  const parts: string[] = [];
+  let offset = 0;
+  for (const match of html.matchAll(/(<img\b(?:[^"'<>]|"[^"]*"|'[^']*')*?\s+src\s*=\s*)(["'])(.*?)\2/gi)) {
+    const [attribute, prefix, quote, value] = match;
+    const resource = resolveRelativePreviewResource(sourceDirectory, decodeResourceAttribute(value));
+    if (!resource || path.extname(resource.filePath).toLowerCase() !== ".svg") continue;
+    if (!rendered.has(resource.filePath)) {
+      rendered.set(resource.filePath, await renderLinkedSvgDataUri(resource.filePath, projectRoot, output));
+    }
+    const dataUri = rendered.get(resource.filePath);
+    if (!dataUri) continue;
+    const fragmentIndex = resource.suffix.indexOf("#");
+    const fragment = fragmentIndex < 0 ? "" : resource.suffix.slice(fragmentIndex);
+    parts.push(html.slice(offset, match.index), `${prefix}${quote}${escapeResourceAttribute(dataUri + fragment)}${quote}`);
+    offset = match.index + attribute.length;
+  }
+  return parts.length ? parts.join("") + html.slice(offset) : html;
+}
+
+/** Escapes a resource URI for an HTML attribute regardless of its quote style. */
+function escapeResourceAttribute(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 /** Decodes resource attribute entities before interpreting URL components. */

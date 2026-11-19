@@ -130,6 +130,7 @@ class PreviewFixture {
       "src/papperMarkdownPreview/clickNavigation.ts": { HtmlPreviewClickNavigation: class {} },
       "src/papperMarkdownPreview/webview.ts": {
         /** Makes HTML comparisons independent of injected browser code. */ injectHtmlPreviewBridge: (html: string) => html,
+        /** Leaves HTML unchanged when no linked SVGs exist. */ embedHtmlLinkedSvgImages: async (html: string) => html,
         /** Leaves HTML unchanged when no local resources exist. */ rewriteHtmlResourceUris: (html: string) => html,
         /** Supplies deterministic nonce generation. */ createNonce: () => "nonce",
         /** Preserves the controller's style-count check. */ countHtmlElements: () => 0,

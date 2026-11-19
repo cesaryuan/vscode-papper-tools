@@ -5,8 +5,8 @@ import { createJimp } from "@jimp/core";
 import jpeg from "@jimp/js-jpeg";
 import png from "@jimp/js-png";
 import * as resize from "@jimp/plugin-resize";
-import { DOMParser, type Element } from "@xmldom/xmldom";
-import { resolveLocalPath, isDataUri, isRemoteUrl } from "./pathResolver";
+import { DOMParser, XMLSerializer, type Element } from "@xmldom/xmldom";
+import { resolveLocalPath, isDataUri, isRemoteUrl, resolveRelativePreviewResource } from "./pathResolver";
 
 type OutputChannelLike = { appendLine(message: string): void };
 type Replacement = { start: number; end: number; value: string };
@@ -17,6 +17,8 @@ const NESTED_RASTER_OUTPUT_MIME_TYPE = "image/png";
 const SVG_DATA_URI_PREFIX = "data:image/svg+xml;base64,";
 const DEFAULT_SVG_WIDTH = 300;
 const DEFAULT_SVG_HEIGHT = 150;
+const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+const XLINK_NAMESPACE = "http://www.w3.org/1999/xlink";
 
 const MIME_TYPES = new Map([
   [".avif", "image/avif"],
@@ -58,6 +60,73 @@ export async function renderSvgPreviewDataUri(document: { uri: vscode.Uri }, svg
     output.appendLine(`SVG image preview failed for ${svgPath}: ${formatError(error)}`);
     return undefined;
   }
+}
+
+/**
+ * Inlines directly linked images for HTML `<img>`, where the browser blocks
+ * external image loads. Unlike hover rendering, this preserves raster quality.
+ */
+export async function renderLinkedSvgDataUri(svgPath: string, projectRoot: string, output: OutputChannelLike): Promise<string | undefined> {
+  if (!isInsideDirectory(projectRoot, svgPath)) return undefined;
+  try {
+    const root = await fs.realpath(projectRoot);
+    const canonicalPath = await fs.realpath(svgPath);
+    if (!isInsideDirectory(root, canonicalPath)) return undefined;
+    const source = await fs.readFile(canonicalPath);
+    const embedded = await embedLinkedSvgImages(source, svgPath, { root, projectRoot, output });
+    return embedded && `${SVG_DATA_URI_PREFIX}${embedded.toString("base64")}`;
+  } catch (error) {
+    output.appendLine(`[HTML] Could not prepare SVG preview for ${svgPath}: ${formatError(error)}`);
+    return undefined;
+  }
+}
+
+type LinkedSvgContext = { root: string; projectRoot: string; output: OutputChannelLike };
+
+/** Embeds images relative to the outer SVG without following links inside any embedded SVG. */
+async function embedLinkedSvgImages(source: Buffer, svgPath: string, context: LinkedSvgContext): Promise<Buffer | undefined> {
+  const document = new DOMParser({ onError: () => undefined }).parseFromString(source.toString("utf8"), "image/svg+xml");
+  if (document.documentElement?.namespaceURI !== SVG_NAMESPACE || document.documentElement.localName !== "svg") return undefined;
+  let changed = false;
+  for (const image of Array.from(document.getElementsByTagNameNS(SVG_NAMESPACE, "image"))) {
+    const hasHref = image.hasAttribute("href");
+    const xlink = image.getAttributeNodeNS(XLINK_NAMESPACE, "href");
+    const href = hasHref ? image.getAttribute("href") : xlink?.value;
+    const resource = href && resolveRelativePreviewResource(path.dirname(svgPath), href);
+    if (!resource) continue;
+    const mimeType = MIME_TYPES.get(path.extname(resource.filePath).toLowerCase());
+    if (!mimeType) continue;
+
+    try {
+      // Match the Markdown Webview's project boundary even when a link follows a symlink.
+      const canonicalPath = isInsideDirectory(context.projectRoot, resource.filePath) && await fs.realpath(resource.filePath);
+      if (!canonicalPath || !isInsideDirectory(context.root, canonicalPath)) {
+        context.output.appendLine(`[HTML] Skipping SVG image outside the Papper project: ${resource.filePath}`);
+        continue;
+      }
+      const bytes = await fs.readFile(canonicalPath);
+      const fragmentIndex = resource.suffix.indexOf("#");
+      const fragment = fragmentIndex < 0 ? "" : resource.suffix.slice(fragmentIndex);
+      const dataUri = `data:${mimeType};base64,${bytes.toString("base64")}${fragment}`;
+      if (hasHref) {
+        image.setAttribute("href", dataUri);
+        // Chromium prefers href; editor-generated SVGs may mirror it in xlink:href.
+        if (xlink) image.removeAttributeNS(XLINK_NAMESPACE, "href");
+      } else if (xlink) {
+        image.setAttributeNS(XLINK_NAMESPACE, xlink.name, dataUri);
+      }
+      changed = true;
+    } catch (error) {
+      context.output.appendLine(`[HTML] Could not inline SVG image ${resource.filePath} in ${svgPath}: ${formatError(error)}`);
+    }
+  }
+  return changed ? Buffer.from(new XMLSerializer().serializeToString(document)) : undefined;
+}
+
+/** Tests a resolved path against a directory boundary, rather than a string prefix. */
+function isInsideDirectory(root: string, filePath: string): boolean {
+  const relative = path.relative(root, filePath);
+  return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 }
 
 /**

@@ -128,11 +128,11 @@ The single image below uses a real local file from the extension repository so M
 
 ![Extension icon used as a single-panel figure fixture.](../assets/icon.png){#fig:single-panel width=30%}
 
-The next two images exercise the SVG and EMF hover preview paths with small local assets from the extension repository.
+The next three images exercise the SVG and EMF preview paths with small local assets from the extension repository.
 
 ![SVG document icon hover preview fixture.](assets/document-icon.svg){#fig:svg-preview-fixture width=20%}
 
-![SVG hover preview fixture with a relative image href inside the SVG.](assets/svg-with-relative-image.svg){#fig:svg-relative-image-fixture width=20%}
+![SVG preview fixture with a relative image href inside the SVG.](assets/svg-with-relative-image.svg){#fig:svg-relative-image-fixture width=20%}
 
 ![EMF document icon hover preview fixture.](assets/document-icon.emf){#fig:emf-preview-fixture width=20%}
 
