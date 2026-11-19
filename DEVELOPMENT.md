@@ -14,6 +14,7 @@ npm ci
 
 Press **F5** and select **Run Papper Tools**. The launch task bundles the extension and opens the sibling Papper checkout's `template/manuscript.md` in an Extension Development Host. The debug window uses the **Papper Tools Development** profile and loads the development copy of Papper Tools with other installed extensions disabled. If you do not have a sibling Papper checkout, change the last two launch arguments to `${workspaceFolder}/test_project` and `${workspaceFolder}/test_project/README.md`.
 
+Run `npm test` to run all `*.test.ts` files under `tests/`, including subdirectories. New test files do not need to be registered in `package.json`.
 Run `npm run check` for the existing type checks, tests, and bundle validation before a code release.
 
 ## Combination figure editor
