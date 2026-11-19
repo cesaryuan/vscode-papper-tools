@@ -2,7 +2,7 @@
   "name": "pandoc-manuscript-tools",
   "displayName": "Papper Tools",
   "description": "%extension.description%",
-  "version": "0.8.3",
+  "version": "0.9.0",
   "publisher": "cesaryuan",
   "license": "GPL-3.0-or-later",
   "repository": {
