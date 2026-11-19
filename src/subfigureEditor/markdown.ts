@@ -1,3 +1,4 @@
+import { DOMParser } from "@xmldom/xmldom";
 import { MarkdownSyntax, parseAttributeList, readAttributeBlock } from "../markdownSyntax";
 import { parsePandocDocument } from "../parser";
 import { arrangePanels, createFigure, createPanel, type FigureDocument, type RichRun } from "./model";
@@ -5,7 +6,7 @@ import { decimal } from "./svg";
 
 export type TextEdit = { start: number; end: number; text: string };
 export type ImportedGroup = { start: number; end: number; original: string; parent: string; caption: string;
-  children: Record<string, string>; figure: FigureDocument };
+  captionAttributes: string; children: Record<string, string>; figure: FigureDocument };
 
 /** Parses only supported caption formatting so conversion never silently drops equations or links. */
 export function parseCaption(text: string): RichRun[] {
@@ -34,12 +35,12 @@ export function parseCaption(text: string): RichRun[] {
 /** Finds an enclosing supported Div using the shared scanner's literal and fence boundaries. */
 export function importMarkdownGroup(text: string, offset: number, width?: number): ImportedGroup {
   const parsed = parsePandocDocument(text), syntax = new MarkdownSyntax(text);
-  const ranges: Array<{ start: number; end: number; innerStart: number; innerEnd: number; parent: string }> = [];
+  const ranges: Array<{ start: number; end: number; innerStart: number; innerEnd: number; parent: string; attributes?: string }> = [];
   for (const div of parsed.fencedDivs) {
     const attributes = parseAttributeList(div.attributes), parent = attributes?.id?.value;
     if (!div.closed || !parent?.startsWith("fig:")) continue;
     const first = syntax.lines[div.range.start.line], last = syntax.lines[div.range.end.line];
-    ranges.push({ start: first.start, end: last.end, innerStart: first.next, innerEnd: last.start, parent });
+    ranges.push({ start: first.start, end: last.end, innerStart: first.next, innerEnd: last.start, parent, attributes: div.attributes });
   }
   for (const label of parsed.labels.filter((entry) => entry.source === "html-div" && entry.containerRange && entry.prefix === "fig")) {
     const end = syntax.lines[label.containerRange.end.line].start + label.containerRange.end.character;
@@ -48,10 +49,26 @@ export function importMarkdownGroup(text: string, offset: number, width?: number
   }
   const selected = ranges.filter((range) => range.start <= offset && offset <= range.end).sort((a, b) => a.end - a.start - (b.end - b.start))[0];
   if (!selected) throw new Error("Place the cursor inside a pandoc-crossref subfigure group");
-  const opening = text.slice(selected.start, selected.innerStart);
-  if (opening.trim().startsWith(":::")) {
-    const attributes = parseAttributeList(opening.trim().replace(/^:+\s*/, ""));
-    if (attributes?.classes.length || attributes?.values.some((item) => item.key !== "original-number")) throw new Error("The figure group has attributes that cannot be preserved");
+  let captionAttributes = "";
+  if (selected.attributes !== undefined) {
+    const source = selected.attributes;
+    const attributes = parseAttributeList(source);
+    if (!attributes || attributes.classes.length || attributes.values.some((item) => item.key !== "original-number" && item.key !== "caption-en")
+      || new Set(attributes.values.map(item => item.key)).size !== attributes.values.length) {
+      throw new Error("The figure group has attributes that cannot be preserved");
+    }
+    // Reuse the original quoted values so formatted overall captions and quotes survive the rewrite.
+    for (const item of attributes.values) captionAttributes += ` ${item.key}=${source.slice(item.start, item.end)}`;
+  } else {
+    // HTML decodes character references in attribute values; Markdown uses backslash escapes instead.
+    const opening = text.slice(selected.start, selected.innerStart);
+    const div = new DOMParser({ errorHandler: () => undefined }).parseFromString(`${opening}</div>`, "text/html").documentElement;
+    for (const attribute of Array.from(div.attributes)) {
+      const key = attribute.name.toLowerCase();
+      if (key === "caption-en" || key === "original-number") {
+        captionAttributes += ` ${key}="${attribute.value.replace(/[\\"]/g, "\\$&").replace(/\s*[\r\n]+\s*/g, " ")}"`;
+      }
+    }
   }
   const inner = text.slice(selected.innerStart, selected.innerEnd);
   const figure = createFigure(width), children: Record<string, string> = {};
@@ -73,12 +90,23 @@ export function importMarkdownGroup(text: string, offset: number, width?: number
       panel.caption = parseCaption(image.caption);
       const attributes = image.attributes;
       const values = new Map(attributes?.values.map((item) => [item.key, item.value]) ?? []);
-      const known = new Set(["width", "height", "label", "original-width", "original-height", "crop-left", "crop-right", "crop-top", "crop-bottom"]);
-      if (attributes?.classes.length || [...values.keys()].some((key) => !known.has(key))) throw new Error("An image uses attributes that cannot be preserved by this editor");
+      const known = new Set(["width", "height", "label", "caption-en", "original-width", "original-height", "crop-left", "crop-right", "crop-top", "crop-bottom"]);
+      if (attributes?.classes.length || attributes && values.size !== attributes.values.length
+        || [...values.keys()].some((key) => !known.has(key))) throw new Error("An image uses attributes that cannot be preserved by this editor");
       if (values.has("label") && values.get("label") !== panel.label) {
         // Keep rewritten manuscript citations consistent with explicit labels after the editor opens.
         figure.autoRenumber = false;
         panel.label = values.get("label");
+      }
+      const english = values.get("caption-en")?.trim();
+      if (english) {
+        const marker = english.match(/^\(([a-z]+)\)\s+/i);
+        // An explicit conflicting letter belongs to the translation; matching letters follow renumbering.
+        if (panel.caption.length) {
+          if (!marker || marker[1] === panel.label) panel.repeatLabel = true;
+          panel.caption.push({ text: "\n" });
+        }
+        panel.caption.push(...parseCaption(marker?.[1] === panel.label ? english.slice(marker[0].length) : english));
       }
       if (attributes?.id) {
         if (children[attributes.id.value] !== undefined) throw new Error("Duplicate child figure identifiers");
@@ -103,7 +131,7 @@ export function importMarkdownGroup(text: string, offset: number, width?: number
   if (imageRowCount) figure.layout.rows.push(imageRowCount);
   if (figure.elements.length < 2 || !caption) throw new Error("A subfigure group needs at least two pictures and an overall caption");
   arrangePanels(figure);
-  return { ...selected, original: text.slice(selected.start, selected.end), caption, children, figure };
+  return { ...selected, original: text.slice(selected.start, selected.end), caption, captionAttributes, children, figure };
 }
 
 /** Reads balanced Markdown image captions and destinations, including spaces in angle-bracket paths. */
@@ -158,7 +186,7 @@ export function conversionEdits(text: string, group: ImportedGroup, svgPath: str
   const parsed = parsePandocDocument(text), syntax = new MarkdownSyntax(text);
   const references = parsed.references.filter((entry) => group.children[entry.label] !== undefined && (entry.offset < group.start || entry.offset >= group.end));
   const edits: TextEdit[] = [{ start: group.start, end: group.end,
-    text: `![${group.caption}](${markdownImagePath(svgPath)}){#${group.parent} width="${decimal(width / 72)}in"}` }];
+    text: `![${group.caption}](${markdownImagePath(svgPath)}){#${group.parent} width="${decimal(width / 72)}in"${group.captionAttributes}}` }];
   const seen = new Set<number>();
   for (const reference of references) {
     // The label offset excludes "@"; replacing the full token also keeps bare citations valid.

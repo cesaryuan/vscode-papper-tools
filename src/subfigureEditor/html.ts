@@ -83,6 +83,7 @@ export function buildSubfigureHtml(script: string, csp: string, icons = ""): str
   <p class="muted">${htmlMessage("Keep the figure within the manuscript column width to preserve its text size in Word.")}</p>
   <label class="check"><input id="transparent" type="checkbox">${htmlMessage("Transparent background")}</label>
   <label class="check"><input id="embedded" type="checkbox">${htmlMessage("Embed image assets")}</label>
+  <label class="check" title="${htmlMessage("Show or hide the panel labels for this entire figure. Captions remain visible.")}"><input id="show-panel-labels" type="checkbox" checked>${htmlMessage("Show panel labels")}</label>
   <hr><div id="inspector"></div><hr>
   <details><summary>${htmlMessage("Advanced grid settings")}</summary><p class="muted">${htmlMessage("Row settings create row-based presets. Use panel docking for nested layouts.")}</p>
   <p class="muted">${htmlMessage("Changing row counts or width weights replaces nested splits with a row layout. Gap and padding changes keep the current structure.")}</p>

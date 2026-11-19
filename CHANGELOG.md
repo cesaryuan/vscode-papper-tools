@@ -6,6 +6,10 @@ All notable changes to Papper Tools are documented in this file.
 
 ### Changed
 
+- Preserve unnumbered layouts from `papper convert --svg` and let the editor show or hide panel labels for the whole figure.
+- Show the panel letter on both lines of bilingual subcaptions. An authored differing English letter stays in the caption.
+
+- Preserve Chinese and English panel captions when converting a Crossref group in the editor, and keep the overall English caption on the manuscript figure.
 - Convert a crossref subfigure group and rewrite its manuscript references immediately when editing it. Open the saved SVG from the manuscript’s workspace root.
 - Reduce combination SVG metadata by reading image sources and rendered lines from SVG artwork and omitting unchanged element styles and zero crops. Existing files migrate on save.
 - Use short, figure-local SVG element IDs, including on resave of legacy figures, and narrow the layout editor’s properties panel.

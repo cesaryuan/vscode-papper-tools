@@ -245,6 +245,13 @@ adding or deleting panels. The SVG saves this choice. **Renumber** also works
 as a one-time action when automatic numbering is off. Turn automatic numbering
 off before editing an individual panel label.
 
+Clear **Show panel labels** in the figure properties for a layout without
+numbering. The setting is saved in the SVG, so editing, adding images or saving
+the figure keeps labels hidden. Subcaptions and independent text stay visible.
+Layouts imported with `papper convert --svg` start with labels hidden when Word
+has no panel numbers. To add letters to such a figure, turn on **Show panel
+labels**, then choose **Renumber** or enable **Auto renumber**.
+
 The right inspector controls panel labels, text, typeface, point size, bold,
 italic, superscript, subscript, colour and alignment. Captions wrap at the panel
 width. Independent text boxes provide shared row and column titles. Crop values
@@ -303,6 +310,11 @@ references in the current manuscript as main-figure references followed by
 their panel label. The saved figure then opens beside the manuscript. Save the
 updated Markdown before building. One workspace undo reverses the conversion,
 including creation of the SVG.
+
+If a panel has `caption-en`, its English caption appears on a new editable
+line under the main caption, with the same panel letter. An English caption
+on the group stays on the replacement Markdown image as `caption-en`. The
+editor also opens bilingual combination SVGs produced by `papper convert --svg`.
 
 Conversion supports inline Markdown images, percentage widths, basic rich
 subcaptions and crop attributes. Unsupported group content, mixed reference

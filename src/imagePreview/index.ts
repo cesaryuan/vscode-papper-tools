@@ -5,7 +5,7 @@ import * as vscode from "vscode";
 import { findImageTokenAtPosition } from "./imageTokenParser";
 import { getDataUriMimeType, prepareImageDataUriForHover } from "./dataUri";
 import { resolveLocalPath } from "./pathResolver";
-import { pruneInlineRasterImagesToDataUriLimit, renderSvgPreviewDataUri } from "./svgPreview";
+import { getSvgPreviewDimensions, pruneInlineRasterImagesToDataUriLimit, renderSvgPreviewDataUri } from "./svgPreview";
 import { renderMetafilePreviewDataUri, type MetafilePreviewOptions } from "./emfPreview";
 import { AsyncLruCache } from "../asyncLruCache";
 
@@ -19,6 +19,8 @@ type ImagePreviewRenderOptions = {
 // 100,000 JavaScript characters. Keep the complete Markdown text strictly below
 // that boundary so an image destination can never be cut in the middle.
 const VSCODE_MARKDOWN_VALUE_LIMIT = 100_000;
+const SVG_HOVER_MAX_WIDTH = 480;
+const SVG_HOVER_MAX_HEIGHT = 300;
 
 export class ImagePreviewRenderer {
   declare output: import("vscode").OutputChannel;
@@ -45,11 +47,8 @@ export class ImagePreviewRenderer {
     }
 
     if (token.dataUri) {
-      const dataUri = await this.prepareEmbeddedHoverDataUri(token.dataUri, token.target);
-      if (!dataUri) {
-        return new vscode.Hover(buildImagePreviewUnavailableHover(token.target), token.range);
-      }
-      return new vscode.Hover(createImagePreviewHoverMarkdown(token.target, dataUri), token.range);
+      const markdown = await this.prepareEmbeddedHoverMarkdown(token.dataUri, token.target);
+      return new vscode.Hover(markdown ?? buildImagePreviewUnavailableHover(token.target), token.range);
     }
 
     const imagePath = resolveLocalPath(document, token.target);
@@ -57,12 +56,8 @@ export class ImagePreviewRenderer {
       return undefined;
     }
 
-    const dataUri = await this.renderHoverToDataUri(document, imagePath, token.extension, token.target);
-    if (!dataUri) {
-      return new vscode.Hover(buildImagePreviewUnavailableHover(token.target), token.range);
-    }
-
-    return new vscode.Hover(createImagePreviewHoverMarkdown(token.target, dataUri), token.range);
+    const markdown = await this.renderHoverMarkdown(document, imagePath, token.extension, token.target);
+    return new vscode.Hover(markdown ?? buildImagePreviewUnavailableHover(token.target), token.range);
   }
 
   /**
@@ -142,9 +137,10 @@ export class ImagePreviewRenderer {
    * @param extension Lowercase image extension.
    * @param target Original image target used in the hover header.
    */
-  private async renderHoverToDataUri(document: PreviewDocument, imagePath: string, extension: string, target: string): Promise<string | undefined> {
+  private async renderHoverMarkdown(document: PreviewDocument, imagePath: string, extension: string, target: string): Promise<vscode.MarkdownString | undefined> {
     let previousLength: number | undefined;
     let smallestDataUri: string | undefined;
+    let dimensionSuffix: string | undefined;
     for (const maxDimension of HOVER_NESTED_RASTER_DIMENSIONS) {
       const dataUri = await this.renderToDataUri(document, imagePath, extension, { nestedRasterMaxDimension: maxDimension });
       if (!dataUri) {
@@ -152,12 +148,14 @@ export class ImagePreviewRenderer {
       }
       smallestDataUri = dataUri;
 
-      const markdownLength = createImagePreviewMarkdownLength(target, dataUri);
+      dimensionSuffix ??= extension === ".svg" ? getSvgHoverDimensionSuffix(dataUri) : "";
+      const markdown = createImagePreviewHoverMarkdown(target, dataUri + dimensionSuffix);
+      const markdownLength = markdown.value.length;
       if (markdownLength < VSCODE_MARKDOWN_VALUE_LIMIT) {
         if (maxDimension !== HOVER_NESTED_RASTER_DIMENSIONS[0]) {
           this.output.appendLine(`Image hover preview reduced inline raster images to ${maxDimension}px; final Markdown length is ${markdownLength}.`);
         }
-        return dataUri;
+        return markdown;
       }
 
       if (markdownLength !== previousLength) {
@@ -166,9 +164,9 @@ export class ImagePreviewRenderer {
       previousLength = markdownLength;
     }
 
-    const prunedDataUri = smallestDataUri ? this.pruneInlineRasterImagesForHover(target, smallestDataUri) : undefined;
-    if (prunedDataUri) {
-      return prunedDataUri;
+    const prunedMarkdown = smallestDataUri ? this.pruneInlineRasterImagesForHover(target, smallestDataUri, dimensionSuffix) : undefined;
+    if (prunedMarkdown) {
+      return prunedMarkdown;
     }
 
     this.output.appendLine(`Image hover preview remains at or above VS Code's ${VSCODE_MARKDOWN_VALUE_LIMIT}-character Markdown limit after the smallest inline raster compression.`);
@@ -181,9 +179,10 @@ export class ImagePreviewRenderer {
    * @param sourceDataUri Original embedded image data URI.
    * @param target Original image target used in the hover header.
    */
-  private async prepareEmbeddedHoverDataUri(sourceDataUri: string, target: string): Promise<string | undefined> {
+  private async prepareEmbeddedHoverMarkdown(sourceDataUri: string, target: string): Promise<vscode.MarkdownString | undefined> {
     let previousLength: number | undefined;
     let smallestDataUri: string | undefined;
+    let dimensionSuffix: string | undefined;
     for (const maxDimension of HOVER_NESTED_RASTER_DIMENSIONS) {
       const dataUri = await prepareImageDataUriForHover(sourceDataUri, this.output, {
         maxNestedRasterDimension: maxDimension,
@@ -193,12 +192,14 @@ export class ImagePreviewRenderer {
       }
       smallestDataUri = dataUri;
 
-      const markdownLength = createImagePreviewMarkdownLength(target, dataUri);
+      dimensionSuffix ??= getSvgHoverDimensionSuffix(dataUri);
+      const markdown = createImagePreviewHoverMarkdown(target, dataUri + dimensionSuffix);
+      const markdownLength = markdown.value.length;
       if (markdownLength < VSCODE_MARKDOWN_VALUE_LIMIT) {
         if (maxDimension !== HOVER_NESTED_RASTER_DIMENSIONS[0]) {
           this.output.appendLine(`Embedded image hover reduced inline raster images to ${maxDimension}px; final Markdown length is ${markdownLength}.`);
         }
-        return dataUri;
+        return markdown;
       }
 
       if (markdownLength !== previousLength) {
@@ -207,9 +208,9 @@ export class ImagePreviewRenderer {
       previousLength = markdownLength;
     }
 
-    const prunedDataUri = smallestDataUri ? this.pruneInlineRasterImagesForHover(target, smallestDataUri) : undefined;
-    if (prunedDataUri) {
-      return prunedDataUri;
+    const prunedMarkdown = smallestDataUri ? this.pruneInlineRasterImagesForHover(target, smallestDataUri, dimensionSuffix) : undefined;
+    if (prunedMarkdown) {
+      return prunedMarkdown;
     }
 
     this.output.appendLine(`Embedded image hover remains at or above VS Code's ${VSCODE_MARKDOWN_VALUE_LIMIT}-character Markdown limit after the smallest inline raster compression.`);
@@ -221,17 +222,22 @@ export class ImagePreviewRenderer {
    *
    * @param target Original image target used in the hover header.
    * @param dataUri Smallest data URI produced by progressive raster compression.
+   * @param dimensionSuffix Markdown image dimensions, preserved when nested images are pruned.
    */
-  private pruneInlineRasterImagesForHover(target: string, dataUri: string): string | undefined {
-    const markdownOverhead = createImagePreviewMarkdownLength(target, "");
+  private pruneInlineRasterImagesForHover(target: string, dataUri: string, dimensionSuffix = ""): vscode.MarkdownString | undefined {
+    const markdownOverhead = createImagePreviewHoverMarkdown(target, dimensionSuffix).value.length;
     const maximumDataUriLength = VSCODE_MARKDOWN_VALUE_LIMIT - markdownOverhead - 1;
     const pruned = pruneInlineRasterImagesToDataUriLimit(dataUri, maximumDataUriLength);
-    if (!pruned || !isWithinVscodeMarkdownLimit(createImagePreviewMarkdownLength(target, pruned.dataUri))) {
+    if (!pruned) {
       return undefined;
     }
 
+    const markdown = createImagePreviewHoverMarkdown(target, pruned.dataUri + dimensionSuffix);
+    if (markdown.value.length >= VSCODE_MARKDOWN_VALUE_LIMIT) {
+      return undefined;
+    }
     this.output.appendLine(`Image hover preview removed ${pruned.removedImageCount} inline raster image node(s) after 1px compression so the final Markdown length stays below ${VSCODE_MARKDOWN_VALUE_LIMIT}.`);
-    return pruned.dataUri;
+    return markdown;
   }
 }
 
@@ -252,7 +258,7 @@ function renderOptionsCacheSuffix(options: ImagePreviewRenderOptions) {
  * Builds the Markdown body for a successful image preview.
  *
  * @param target Original image target.
- * @param imageSource Preview image data URI.
+ * @param imageSource Preview image data URI with optional Markdown dimensions.
  */
 function createImagePreviewHoverMarkdown(target: string, imageSource: string) {
   const markdown = new vscode.MarkdownString(undefined, true);
@@ -262,22 +268,24 @@ function createImagePreviewHoverMarkdown(target: string, imageSource: string) {
 }
 
 /**
- * Computes the exact MarkdownString value length used by the image hover.
+ * Fits SVG hovers to a compact viewport while retaining the original SVG data.
  *
- * @param target Original image target.
- * @param imageSource Preview image data URI.
+ * @param dataUri Rendered hover image data URI.
  */
-function createImagePreviewMarkdownLength(target: string, imageSource: string): number {
-  return createImagePreviewHoverMarkdown(target, imageSource).value.length;
-}
+function getSvgHoverDimensionSuffix(dataUri: string): string {
+  const dimensions = getSvgPreviewDimensions(dataUri);
+  if (!dimensions) {
+    return "";
+  }
+  const scale = Math.min(1, SVG_HOVER_MAX_WIDTH / dimensions.width, SVG_HOVER_MAX_HEIGHT / dimensions.height);
+  if (scale === 1 && !dimensions.inferred) {
+    return "";
+  }
 
-/**
- * Checks a final MarkdownString value against VS Code's pre-parse truncation boundary.
- *
- * @param markdownLength Exact final MarkdownString character length.
- */
-function isWithinVscodeMarkdownLimit(markdownLength: number): boolean {
-  return markdownLength < VSCODE_MARKDOWN_VALUE_LIMIT;
+  // VS Code reads both dimensions from the same pipe-delimited field.
+  const width = Math.max(1, Math.round(dimensions.width * scale));
+  const height = Math.max(1, Math.round(dimensions.height * scale));
+  return `|width=${width},height=${height}`;
 }
 
 // Try the existing 100px compression first, then progressively smaller bounds.

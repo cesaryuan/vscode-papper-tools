@@ -227,6 +227,39 @@ test("converting fenced and HTML crossref groups preserves formatted captions, o
   }
 });
 
+test("bilingual crossref conversion renders both panel captions and retains the translated figure title", () => {
+  const forms = [
+    ['::: {#fig:comparison original-number="图 2-8" caption-en=\'Comparison of "test" cases\'} :::', ':::',
+      'caption-en=\'Comparison of "test" cases\''],
+    ['<div id="fig:comparison" original-number="图 2-8" caption-en="Comparison of &quot;test&quot; cases">', '</div>',
+      'caption-en="Comparison of \\"test\\" cases"'],
+  ];
+  for (const [open, close, title] of forms) {
+    const source = [open,
+      '![正常](normal.png){#fig:normal caption-en="(a) **Normal**"} ![突变](mutation.png){#fig:mutation caption-en="(c) *Mutation*"}',
+      "", "各类工况对比", close,
+    ].join("\n");
+    const group = importMarkdownGroup(source, source.indexOf("![正常]"));
+    const saved = parseFigureSvg(serializeFigure(group.figure));
+    const captions = saved.elements.map(element => element.kind === "panel" ? element.caption : []);
+    assert.deepEqual(captions.map(runs => runs.map(run => run.text).join("")), ["正常\nNormal", "突变\n(c) Mutation"]);
+    assert(captions[0].some(run => run.text === "Normal" && run.bold));
+    assert(captions[1].some(run => run.text === "Mutation" && run.italic));
+    assert.deepEqual(saved.elements.map(element => element.lines?.map(line => line.runs.map(run => run.text).join(""))),
+      [["(a) 正常", "(a) Normal"], ["(b) 突变", "(c) Mutation"]]);
+    saved.elements.reverse();
+    arrangePanels(saved);
+    renumberPanels(saved);
+    arrangePanels(saved);
+    const reordered = parseFigureSvg(serializeFigure(saved));
+    assert.deepEqual(reordered.elements.map(element => element.lines?.map(line => line.runs.map(run => run.text).join(""))),
+      [["(a) 突变", "(c) Mutation"], ["(b) 正常", "(b) Normal"]]);
+    const rewritten = apply(source, conversionEdits(source, group, "subfigure-comparison.svg", group.figure.width));
+    assert(rewritten.includes('![各类工况对比](subfigure-comparison.svg){#fig:comparison'));
+    assert(rewritten.endsWith(`original-number="图 2-8" ${title}}`));
+  }
+});
+
 test("conversion refuses stale source, mixed content and reference forms it cannot safely preserve", () => {
   const source = '::: {#fig:group}\n![A](a.png){#fig:a width="50%"} ![B](b.png){#fig:b width="50%"}\n\nCaption\n:::';
   const group = importMarkdownGroup(source, 15);
@@ -349,6 +382,37 @@ test("automatic numbering follows edited visual positions and disabling it prese
   (restored.elements[1] as Panel).label = "Manual";
   assert(autoRenumberPanels(restored));
   assert.equal((restored.elements[1] as Panel).label, "b");
+});
+
+test("unnumbered layouts retain their captions and stay unnumbered after editing and reopening", () => {
+  const figure = createFigure();
+  const first = createPanel(figure, "first.png", "First");
+  const second = createPanel(figure, "second.png", "Second");
+  first.labelPosition = "top-left";
+  second.label = "b";
+  second.repeatLabel = true;
+  second.caption = [{ text: "基线\nBaseline" }];
+  figure.elements.push(first, second);
+  figure.showPanelLabels = false;
+  arrangePanels(figure);
+  const hidden = serializeFigure(figure);
+  const restored = parseFigureSvg(hidden);
+  const added = createPanel(restored, "third.png", "Third");
+  restored.elements.push(added);
+  assert.equal(autoRenumberPanels(restored), false);
+  renumberPanels(restored);
+  restored.layout.mode = "panels";
+  arrangePanels(restored);
+  const reopened = parseFigureSvg(serializeFigure(restored));
+  assert.equal(reopened.showPanelLabels, false);
+  assert.deepEqual(reopened.elements.map(element => element.lines.map(line => line.runs.map(run => run.text).join(""))),
+    [[], ["基线", "Baseline"], []]);
+  reopened.showPanelLabels = true;
+  assert(autoRenumberPanels(reopened));
+  reflowFigure(reopened);
+  const visible = serializeFigure(reopened);
+  assert.match(visible, />\(a\)<\/tspan>/);
+  assert.match(visible, />\(b\) Baseline<\/tspan>/);
 });
 
 test("Save As rebases links and embedded assets round-trip without changing image bytes", async () => {

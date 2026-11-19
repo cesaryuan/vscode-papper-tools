@@ -31,26 +31,26 @@ function runSvg(run: RichRun, style: TextStyle): string {
 }
 
 /** Draws one whole source image through an independent viewport so cropping never edits the source. */
-function panelSvg(panel: Panel, source: string, prefix: string): string {
+function panelSvg(panel: Panel, source: string, prefix: string, showLabels: boolean): string {
   const sourceWidth = 1000, sourceHeight = sourceWidth / panel.ratio;
   const { left, top, right, bottom } = panel.crop;
   const viewBox = [sourceWidth * left / 100, sourceHeight * top / 100, sourceWidth * (100 - left - right) / 100,
     sourceHeight * (100 - top - bottom) / 100].map(decimal).join(" ");
   let result = `${prefix}<svg x="${decimal(panel.x)}" y="${decimal(panel.y)}" width="${decimal(panel.width)}" height="${decimal(panel.height)}" viewBox="${viewBox}" preserveAspectRatio="xMidYMid meet" overflow="hidden">`
     + `${prefix && prefix + "  "}<image width="${sourceWidth}" height="${decimal(sourceHeight)}" href="${escapeXml(source)}" xlink:href="${escapeXml(source)}" preserveAspectRatio="none"/>${prefix}</svg>`;
-  if (panel.label && panel.labelPosition.startsWith("top-")) {
+  if (showLabels && panel.label && panel.labelPosition.startsWith("top-")) {
     const x = panel.labelPosition === "top-right" ? panel.x + panel.width - 4 : panel.x + 4;
     result += textSvg([{ runs: [{ text: `(${panel.label})` }], width: 0 }], x, panel.y + 2, 0,
       { ...panel.style, align: panel.labelPosition === "top-right" ? "right" : "left" }, prefix);
   }
-  return result + textSvg(panel.lines ?? wrapText(captionRuns(panel), panel.width, panel.style), panel.x,
+  return result + textSvg(panel.lines ?? wrapText(captionRuns(panel, showLabels), panel.width, panel.style), panel.x,
     panel.y + panel.height + panel.gap, panel.width, panel.style, prefix);
 }
 
 /** Draws the same element graph for live editing, SVG files and raster export. */
-export function renderElement(element: FigureElement, resolve: (source: string) => string = (source) => source, formatted = false): string {
+export function renderElement(element: FigureElement, resolve: (source: string) => string = (source) => source, formatted = false, showLabels = true): string {
   const prefix = formatted ? "\n    " : "";
-  const content = element.kind === "panel" ? panelSvg(element, resolve(element.source), prefix)
+  const content = element.kind === "panel" ? panelSvg(element, resolve(element.source), prefix, showLabels)
     : textSvg(element.lines ?? wrapText(element.runs, element.width, element.style), element.x, element.y, element.width, element.style, prefix);
   return `${formatted ? "  " : ""}<g data-element-id="${escapeXml(element.id)}">${content}${formatted ? "\n  " : ""}</g>`;
 }
@@ -74,5 +74,5 @@ export function serializeFigure(figure: FigureDocument, resolve: (source: string
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${decimal(figure.width / 72)}in" height="${decimal(figure.height / 72)}in" viewBox="0 0 ${decimal(figure.width)} ${decimal(figure.height)}">\n`
     + (metadata ? `  <metadata id="papper-subfigure">\n    ${escapeXmlText(layoutMetadata(figure)).replace(/\n/g, "\n    ")}\n  </metadata>\n` : "")
     + (figure.background === "white" ? `  <rect width="100%" height="100%" fill="white"/>\n` : "")
-    + figure.elements.map((element) => renderElement(element, resolve, true) + "\n").join("") + "</svg>\n";
+    + figure.elements.map((element) => renderElement(element, resolve, true, figure.showPanelLabels) + "\n").join("") + "</svg>\n";
 }

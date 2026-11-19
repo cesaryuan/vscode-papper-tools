@@ -5,6 +5,7 @@ import { createJimp } from "@jimp/core";
 import jpeg from "@jimp/js-jpeg";
 import png from "@jimp/js-png";
 import * as resize from "@jimp/plugin-resize";
+import { DOMParser, type Element } from "@xmldom/xmldom";
 import { resolveLocalPath, isDataUri, isRemoteUrl } from "./pathResolver";
 
 type OutputChannelLike = { appendLine(message: string): void };
@@ -14,6 +15,8 @@ export type SvgPreviewOptions = { maxNestedRasterDimension?: number };
 const MAX_NESTED_RASTER_DIMENSION = 100;
 const NESTED_RASTER_OUTPUT_MIME_TYPE = "image/png";
 const SVG_DATA_URI_PREFIX = "data:image/svg+xml;base64,";
+const DEFAULT_SVG_WIDTH = 300;
+const DEFAULT_SVG_HEIGHT = 150;
 
 const MIME_TYPES = new Map([
   [".avif", "image/avif"],
@@ -55,6 +58,78 @@ export async function renderSvgPreviewDataUri(document: { uri: vscode.Uri }, svg
     output.appendLine(`SVG image preview failed for ${svgPath}: ${formatError(error)}`);
     return undefined;
   }
+}
+
+/**
+ * Reads the natural dimensions from a base64-encoded SVG data URI.
+ *
+ * @param dataUri SVG data URI returned by the preview renderer.
+ */
+export function getSvgPreviewDimensions(dataUri: string) {
+  if (!dataUri.startsWith(SVG_DATA_URI_PREFIX)) {
+    return undefined;
+  }
+
+  let root: Element | null;
+  try {
+    const svg = Buffer.from(dataUri.slice(SVG_DATA_URI_PREFIX.length), "base64").toString("utf8");
+    root = new DOMParser({ onError: () => undefined }).parseFromString(svg, "image/svg+xml").documentElement;
+  } catch {
+    // Leave malformed SVGs to the existing image render path.
+    return undefined;
+  }
+  if (root?.localName !== "svg") {
+    return undefined;
+  }
+
+  const width = parseSvgLength(root.getAttribute("width"));
+  const height = parseSvgLength(root.getAttribute("height"));
+  if (width && height) {
+    return { width, height, inferred: false };
+  }
+
+  const viewBox = readSvgViewBox(root.getAttribute("viewBox"));
+  if (!viewBox) {
+    return { width: width ?? DEFAULT_SVG_WIDTH, height: height ?? DEFAULT_SVG_HEIGHT, inferred: true };
+  }
+
+  const ratio = viewBox.width / viewBox.height;
+  if (width) return { width, height: width / ratio, inferred: true };
+  if (height) return { width: height * ratio, height, inferred: true };
+  // A viewBox alone supplies a ratio, not a natural pixel size.
+  const scale = Math.min(DEFAULT_SVG_WIDTH / viewBox.width, DEFAULT_SVG_HEIGHT / viewBox.height);
+  return { width: viewBox.width * scale, height: viewBox.height * scale, inferred: true };
+}
+
+/**
+ * Reads a positive SVG length and converts common physical units to pixels.
+ *
+ * @param value Raw SVG length.
+ */
+function parseSvgLength(value: string | null) {
+  const match = value?.trim().match(/^(\+?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)(px|pt|pc|in|cm|mm|q)?$/i);
+  if (!match) {
+    return undefined;
+  }
+
+  const unitScale = { px: 1, pt: 96 / 72, pc: 16, in: 96, cm: 96 / 2.54, mm: 96 / 25.4, q: 96 / 101.6 };
+  const unit = (match[2]?.toLowerCase() || "px") as keyof typeof unitScale;
+  const parsed = Number(match[1]) * unitScale[unit];
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+/**
+ * Reads the positive width and height from an SVG viewBox.
+ *
+ * @param value Root SVG viewBox attribute.
+ */
+function readSvgViewBox(value: string | null) {
+  const parts = value ? value.trim().split(/[\s,]+/).map(Number) : [];
+  if (parts.length !== 4 || !parts.every(Number.isFinite) || parts[2] <= 0 || parts[3] <= 0) {
+    return undefined;
+  }
+
+  return { width: parts[2], height: parts[3] };
 }
 
 /**

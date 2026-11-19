@@ -11,7 +11,7 @@ export type Crop = { left: number; top: number; right: number; bottom: number };
 export type Panel = {
   kind: "panel"; id: string; source: string; linkedSource?: string; name: string; ratio: number;
   x: number; y: number; width: number; height: number;
-  label: string; labelPosition: "below" | "top-left" | "top-right" | "none";
+  label: string; labelPosition: "below" | "top-left" | "top-right" | "none"; repeatLabel?: boolean;
   caption: RichRun[]; style: TextStyle; lines?: TextLine[]; crop: Crop; gap: number;
 };
 export type SharedText = {
@@ -21,6 +21,7 @@ export type SharedText = {
 export type FigureElement = Panel | SharedText;
 export type FigureDocument = {
   format: "papper-subfigure"; version: 1; width: number; height: number; autoHeight: boolean; embedded: boolean; autoRenumber?: boolean;
+  showPanelLabels?: boolean;
   background: "white" | "transparent"; font: TextStyle;
   layout: { mode?: "rows" | "panels" | "free"; tree?: PanelTree; columns: number; rows: number[]; weights: number[]; gap: number; rowGap: number; padding: number };
   elements: FigureElement[];
@@ -38,7 +39,7 @@ export function createFigure(width = 160 * PT_PER_MM): FigureDocument {
 export function createPanel(figure: FigureDocument, source: string, name: string, ratio = 1.5): Panel {
   const index = figure.elements.filter((element) => element.kind === "panel").length;
   return { kind: "panel", id: newElementId(figure), source, name, ratio, x: 8, y: 8, width: 180, height: 120,
-    label: panelLetter(index), labelPosition: "below", caption: [], style: { ...figure.font },
+    label: figure.showPanelLabels === false ? "" : panelLetter(index), labelPosition: "below", caption: [], style: { ...figure.font },
     crop: { left: 0, right: 0, top: 0, bottom: 0 }, gap: 5 };
 }
 
@@ -54,10 +55,18 @@ export function visibleRatio(panel: Panel): number {
   return panel.ratio * (100 - panel.crop.left - panel.crop.right) / (100 - panel.crop.top - panel.crop.bottom);
 }
 
-/** Produces the attached caption, with a visual letter only when its position is below. */
-export function captionRuns(panel: Panel): RichRun[] {
-  const prefix = panel.labelPosition === "below" && panel.label ? [{ text: `(${panel.label})${panel.caption.length ? " " : ""}` }] : [];
-  return [...prefix, ...panel.caption];
+/** Adds the current panel label to both languages without putting it into their editable text. */
+export function captionRuns(panel: Panel, showLabels = true): RichRun[] {
+  if (!showLabels || panel.labelPosition !== "below" || !panel.label) return panel.caption;
+  const prefix = { text: `(${panel.label})${panel.caption.length ? " " : ""}` };
+  const index = panel.repeatLabel ? panel.caption.findIndex(run => run.text.includes("\n")) : -1;
+  if (index < 0) return [prefix, ...panel.caption];
+  const line = panel.caption[index];
+  const split = line.text.indexOf("\n") + 1;
+  const rest = line.text.slice(split);
+  const following = rest ? [{ ...line, text: rest }, ...panel.caption.slice(index + 1)] : panel.caption.slice(index + 1);
+  if (!following.some(run => run.text.trim())) return [prefix, ...panel.caption.slice(0, index), { ...line, text: line.text.slice(0, split - 1) }];
+  return [prefix, ...panel.caption.slice(0, index), { ...line, text: line.text.slice(0, split) }, prefix, ...following];
 }
 
 /** Measures fallback layouts before a browser has supplied actual selected-font metrics. */
@@ -101,7 +110,7 @@ export function wrapText(runs: RichRun[], width: number, style: TextStyle, measu
 /** Recomputes caption geometry without changing any manually placed picture coordinates. */
 export function reflowFigure(figure: FigureDocument, measure: MeasureText = estimateText): void {
   for (const element of figure.elements) {
-    element.lines = wrapText(element.kind === "panel" ? captionRuns(element) : element.runs, element.width, element.style, measure);
+    element.lines = wrapText(element.kind === "panel" ? captionRuns(element, figure.showPanelLabels) : element.runs, element.width, element.style, measure);
   }
   if (figure.autoHeight && figure.elements.length) {
     figure.height = Math.max(30, ...figure.elements.map((element) => element.y + elementHeight(element))) + figure.layout.padding;
@@ -131,7 +140,7 @@ export function arrangePanels(figure: FigureDocument, measure: MeasureText = est
     let x = padding;
     for (let offset = 0; offset < row.length; offset++) {
       Object.assign(row[offset], { x, y, width: available * factors[offset] / total, height: rowHeight });
-      row[offset].lines = wrapText(captionRuns(row[offset]), row[offset].width, row[offset].style, measure);
+      row[offset].lines = wrapText(captionRuns(row[offset], figure.showPanelLabels), row[offset].width, row[offset].style, measure);
       x += row[offset].width + gap;
     }
     y += Math.max(...row.map(elementHeight)) + rowGap;
@@ -154,6 +163,7 @@ export function resizeFigure(figure: FigureDocument, width: number, measure: Mea
 
 /** Assigns sequential letters in the current top-to-bottom, left-to-right visual order. */
 export function renumberPanels(figure: FigureDocument): void {
+  if (figure.showPanelLabels === false) return;
   figure.elements.filter((element): element is Panel => element.kind === "panel")
     .sort((a, b) => Math.abs(a.y - b.y) < 4 ? a.x - b.x : a.y - b.y)
     .forEach((panel, index) => { panel.label = panelLetter(index); });
@@ -161,7 +171,7 @@ export function renumberPanels(figure: FigureDocument): void {
 
 /** Updates labels after an edit by default, preserving custom labels when automatic numbering is disabled. */
 export function autoRenumberPanels(figure: FigureDocument): boolean {
-  if (figure.autoRenumber === false) return false;
+  if (figure.showPanelLabels === false || figure.autoRenumber === false) return false;
   const panels = figure.elements.filter((element): element is Panel => element.kind === "panel"), labels = panels.map((panel) => panel.label);
   renumberPanels(figure);
   return panels.some((panel, index) => panel.label !== labels[index]);
@@ -200,6 +210,7 @@ export function validateFigure(value: unknown): asserts value is FigureDocument 
   const figure = value as FigureDocument;
   if (figure?.format !== "papper-subfigure" || figure.version !== 1 || !Array.isArray(figure.elements)) throw new Error("Unsupported combination figure format");
   if (figure.autoRenumber !== undefined && typeof figure.autoRenumber !== "boolean") throw new Error("Invalid automatic numbering setting");
+  if (figure.showPanelLabels !== undefined && typeof figure.showPanelLabels !== "boolean") throw new Error("Invalid panel label visibility setting");
   /** Validates physical sizes entered through numeric controls. */
   const positive = (number: number): boolean => Number.isFinite(number) && number > 0;
   if (!positive(figure.width) || !positive(figure.height)) throw new Error("Figure dimensions must be positive");
@@ -214,6 +225,7 @@ export function validateFigure(value: unknown): asserts value is FigureDocument 
     ids.add(element.id);
     if (![element.x, element.y].every(Number.isFinite) || !positive(element.width) || !positive(element.style?.size)) throw new Error("Invalid element dimensions");
     if (element.kind === "panel" && (!positive(element.height) || !positive(element.ratio) || !element.source
+      || element.repeatLabel !== undefined && typeof element.repeatLabel !== "boolean"
       || Object.values(element.crop).some((number) => !Number.isFinite(number) || number < 0)
       || element.crop.left + element.crop.right >= 100 || element.crop.top + element.crop.bottom >= 100)) throw new Error("Invalid image crop or size");
   }

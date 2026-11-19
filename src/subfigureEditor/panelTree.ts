@@ -79,7 +79,7 @@ export function arrangePanelTree(figure: FigureDocument, measure: MeasureText = 
   /** Measures actual widths before placing cells, avoiding caption feedback that collapses narrow columns. */
   const plan = (node: PanelTree, availableWidth: number): Plan => {
     if (node.kind === "panel") {
-      const panel = panels.get(node.id), lines = wrapText(captionRuns(panel), availableWidth, panel.style, measure);
+      const panel = panels.get(node.id), lines = wrapText(captionRuns(panel, figure.showPanelLabels), availableWidth, panel.style, measure);
       const a = 1 / visibleRatio(panel), b = lines.length ? panel.gap + lines.length * panel.style.size * 1.25 : 0;
       return { node, width: availableWidth, height: a * availableWidth + b, a, b };
     }

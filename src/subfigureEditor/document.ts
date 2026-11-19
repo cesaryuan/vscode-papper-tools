@@ -36,7 +36,7 @@ function restoreCompactFigure(figure: Omit<FigureDocument, "version"> & { versio
       element.crop ??= { left: 0, right: 0, top: 0, bottom: 0 };
     }
     // A corner label is rendered before the caption, but is not one of its wrapped lines.
-    const skipLabel = element.kind === "panel" && element.label && element.labelPosition.startsWith("top-");
+    const skipLabel = figure.showPanelLabels !== false && element.kind === "panel" && element.label && element.labelPosition.startsWith("top-");
     element.lines = children.filter(child => child.localName === "text").slice(skipLabel ? 1 : 0)
       .map(line => savedLine(line, element.style));
   }

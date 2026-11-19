@@ -136,7 +136,7 @@ function renderCanvas(): void {
 
 /** Gives cleared text a clickable first line on the canvas without writing a placeholder into the SVG. */
 function canvasElement(element: FigureElement): string {
-  const markup = renderElement(element, imageSource);
+  const markup = renderElement(element, imageSource, false, figure.showPanelLabels);
   if (element.lines?.length) return markup;
   const y = element.y + (element.kind === "panel" ? element.height + element.gap : 0);
   return markup.slice(0, -4) + `<rect class="empty-text-target" x="${element.x}" y="${y}" width="${element.width}" height="${element.style.size * 1.25}" fill="transparent"/></g>`;
@@ -338,7 +338,7 @@ function patchCanvas(display: FigureDocument): void {
   const template = document.createElementNS("http://www.w3.org/2000/svg", "g");
   for (const element of display.elements) {
     // Source URLs are omitted from patching so large data URIs are never reparsed per frame.
-    template.innerHTML = renderElement(element, () => "");
+    template.innerHTML = renderElement(element, () => "", false, display.showPanelLabels);
     patchSvg(existing.get(element.id), template.firstElementChild);
   }
   document.getElementById("overlays").innerHTML = canvasOverlays(display);
@@ -357,7 +357,8 @@ function setValue(id: string, value: string | number | boolean): void {
 /** Renders the element list and figure inspector after a committed edit or native undo. */
 function render(): void {
   renderCanvas();
-  node("elements").innerHTML = figure.elements.map((element) => `<button class="item${selected.has(element.id) ? " selected" : ""}" data-select="${escapeXml(element.id)}" draggable="true" title="${escapeXml(t("Select this element. Shift-click to add it to the selection; drag it onto the canvas to arrange it."))}"><span class="badge">${element.kind === "panel" ? escapeXml(element.label ? `(${element.label})` : "▧") : "T"}</span><span class="name">${escapeXml(element.kind === "panel" ? element.name : element.runs.map((run) => run.text).join(""))}</span></button>`).join("");
+  const showLabels = figure.showPanelLabels !== false;
+  node("elements").innerHTML = figure.elements.map((element) => `<button class="item${selected.has(element.id) ? " selected" : ""}" data-select="${escapeXml(element.id)}" draggable="true" title="${escapeXml(t("Select this element. Shift-click to add it to the selection; drag it onto the canvas to arrange it."))}"><span class="badge">${element.kind === "panel" ? escapeXml(showLabels && element.label ? `(${element.label})` : "▧") : "T"}</span><span class="name">${escapeXml(element.kind === "panel" ? element.name : element.runs.map((run) => run.text).join(""))}</span></button>`).join("");
   setValue("layout-mode", rowsMode() ? "panels" : "free");
   document.querySelector<HTMLButtonElement>("[data-action=arrange]").disabled = rowsMode();
   for (const button of document.querySelectorAll<HTMLButtonElement>("[data-action^='nested:']")) {
@@ -372,7 +373,10 @@ function render(): void {
   setValue("figure-width", Number((figure.width / unitPoints()).toFixed(2)));
   setValue("figure-height", Number((figure.height / unitPoints()).toFixed(2)));
   setValue("auto-height", figure.autoHeight); setValue("transparent", figure.background === "transparent"); setValue("embedded", figure.embedded);
-  setValue("auto-renumber", figure.autoRenumber !== false);
+  node<HTMLInputElement>("show-panel-labels").checked = showLabels;
+  node<HTMLInputElement>("auto-renumber").checked = showLabels && figure.autoRenumber !== false;
+  node<HTMLInputElement>("auto-renumber").disabled = !showLabels;
+  document.querySelector<HTMLButtonElement>("[data-action=renumber]").disabled = !showLabels;
   setValue("columns", figure.layout.columns); setValue("gap", figure.layout.gap); setValue("row-gap", figure.layout.rowGap); setValue("padding", figure.layout.padding);
   setValue("rows", figure.layout.rows.join(", ")); setValue("weights", figure.layout.weights.join(", "));
   setValue("default-family", figure.font.family); setValue("default-size", figure.font.size);
@@ -455,8 +459,8 @@ function renderInspector(): void {
   node("inspector").innerHTML = `<h2>${escapeXml(t(panel ? "Subfigure" : "Shared text"))}</h2><div class="pair">`
     + field("X (pt)", "x", decimal(element.x)) + field("Y (pt)", "y", decimal(element.y)) + field("Width (pt)", "width", decimal(element.width))
     + (panel ? field("Height (pt)", "height", decimal(panel.height)) : "") + "</div>"
-    + (panel ? field("Panel label", "label", panel.label, "text") + `<label class="field"><span>${escapeXml(t("Label position"))}</span><select data-property="labelPosition">${["below", "top-left", "top-right", "none"].map((value) => `<option value="${value}"${value === panel.labelPosition ? " selected" : ""}>${escapeXml(t({ below: "Below image", "top-left": "Top left", "top-right": "Top right", none: "Hidden" }[value]))}</option>`).join("")}</select></label>`
-      + field("Caption gap (pt)", "gap", panel.gap) : "")
+    + (panel && figure.showPanelLabels !== false ? field("Panel label", "label", panel.label, "text") + `<label class="field"><span>${escapeXml(t("Label position"))}</span><select data-property="labelPosition">${["below", "top-left", "top-right", "none"].map((value) => `<option value="${value}"${value === panel.labelPosition ? " selected" : ""}>${escapeXml(t({ below: "Below image", "top-left": "Top left", "top-right": "Top right", none: "Hidden" }[value]))}</option>`).join("")}</select></label>` : "")
+    + (panel ? field("Caption gap (pt)", "gap", panel.gap) : "")
     + field("Western font", "family", element.style.family, "text") + field("Chinese font", "cjkFamily", element.style.cjkFamily || DEFAULT_CHINESE_FONT, "text") + `<div class="pair">` + field("Font size (pt)", "size", element.style.size) + field("Text color", "color", element.style.color, "color") + "</div>"
     + `<label class="field"><span>${escapeXml(t("Text alignment"))}</span><select data-property="align">${["left", "center", "right"].map((value) => `<option${element.style.align === value ? " selected" : ""}>${value}</option>`).join("")}</select></label>`
     + `<h3>${escapeXml(t(panel ? "Subcaption" : "Text"))}</h3><div class="tools">${formatButtons()}</div>`
@@ -491,6 +495,7 @@ function canvasTextPart(target: Element, element: FigureElement, event: PointerE
   const line = target.closest("text");
   if (!line && !target.closest(".empty-text-target")) return undefined;
   if (element.kind === "text") return "text";
+  if (figure.showPanelLabels === false) return "caption";
   if (line && element.label && element.labelPosition.startsWith("top-") && line === line.parentElement.querySelector(":scope > text")) {
     return figure.autoRenumber === false ? "label" : undefined;
   }
@@ -517,7 +522,7 @@ function positionCanvasText(): void {
     textAlign: corner ? (right ? "right" : "left") : element.style.align, color: element.style.color, fontFamily: editorFont(element.style) });
   const lines = document.querySelectorAll<SVGTextElement>(`#artwork [data-element-id="${CSS.escape(element.id)}"] > text`);
   for (const [index, line] of lines.entries()) {
-    const cornerLabel = index === 0 && panel?.label && panel.labelPosition.startsWith("top-");
+    const cornerLabel = figure.showPanelLabels !== false && index === 0 && panel?.label && panel.labelPosition.startsWith("top-");
     if (Boolean(cornerLabel) === Boolean(corner)) line.style.visibility = "hidden";
   }
   positionFormatBar();
@@ -529,7 +534,7 @@ function beginCanvasText(id: string, part: CanvasTextPart, event: PointerEvent):
   const panel = element.kind === "panel" ? element : undefined;
   canvasText.innerHTML = part === "label" ? escapeXml(panel.label) : richHtml(element.kind === "text" ? element.runs : element.caption);
   inlineEdit = { id, part, originalHtml: canvasText.innerHTML };
-  canvasText.dataset.prefix = part === "caption" && panel.label && panel.labelPosition === "below" ? `(${panel.label}) ` : "";
+  canvasText.dataset.prefix = part === "caption" && figure.showPanelLabels !== false && panel.label && panel.labelPosition === "below" ? `(${panel.label}) ` : "";
   canvasText.setAttribute("aria-label", t(part === "label" ? "Panel label" : part === "caption" ? "Subcaption" : "Text"));
   canvasText.classList.remove("hidden"); positionCanvasText(); positionPanelTools();
   canvasText.focus({ preventScroll: true });
@@ -892,6 +897,13 @@ document.addEventListener("change", (event) => {
   if (id === "a4") { a4 = (input as HTMLInputElement).checked; render(); fitCanvas(); return; }
   if (id === "zoom") { setZoom(Number(input.value) / 100); return; }
   if (id === "snap") return;
+  if (id === "show-panel-labels") {
+    figure.showPanelLabels = (input as HTMLInputElement).checked ? undefined : false;
+    autoRenumberPanels(figure);
+    // Numbering changes the space reserved for captions in a panel layout.
+    if (rowsMode()) arrangePanels(figure, measureRun);
+    commit("Change panel label visibility"); return;
+  }
   if (id === "auto-renumber") { figure.autoRenumber = (input as HTMLInputElement).checked; commit("Change automatic numbering"); return; }
   if (id === "layout-mode") {
     figure.layout.mode = input.value as "panels" | "free";
